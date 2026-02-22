@@ -29,14 +29,19 @@ export const orderStatusEnum = pgEnum('order_status', [
 export const paymentStatusEnum = pgEnum('payment_status', [
     'unpaid',
     'paid',
+    'partial',
     'failed',
     'refunded',
 ]);
 
 export const paymentMethodEnum = pgEnum('payment_method', [
     'cod',
-    'sslcommerz',
-    'bkash',
+    "on_air"
+]);
+
+export const paymentTypeEnum = pgEnum('payment_type', [
+    'full',
+    'partial',
 ]);
 
 // ─── Orders Table ─────────────────────────────────────────────────────────────
@@ -53,6 +58,7 @@ export const orders = pgTable('orders', {
     status: orderStatusEnum('status').notNull().default('pending'),
     paymentStatus: paymentStatusEnum('payment_status').notNull().default('unpaid'),
     paymentMethod: paymentMethodEnum('payment_method').notNull(),
+    paymentType: paymentTypeEnum('payment_type').notNull(),
     subtotal: numeric('subtotal', { precision: 10, scale: 2 }).notNull(),
     discountAmount: numeric('discount_amount', { precision: 10, scale: 2 }).notNull().default('0'),
     total: numeric('total', { precision: 10, scale: 2 }).notNull(),

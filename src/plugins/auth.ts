@@ -8,8 +8,8 @@ import { UnauthorizedError, ForbiddenError } from '@/shared/errors.js';
 
 declare module '@fastify/jwt' {
     interface FastifyJWT {
-        payload: { sub: string; role: 'admin' | 'customer' };
-        user: { id: string; role: 'admin' | 'customer' };
+        payload: { sub: string; role: 'customer' | 'operator' | 'super_admin' };
+        user: { id: string; role: 'customer' | 'operator' | 'super_admin' };
     }
 }
 
@@ -32,7 +32,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         'authenticate',
         async (request: FastifyRequest, _reply: FastifyReply) => {
             try {
-                const payload = await request.jwtVerify<{ sub: string; role: 'admin' | 'customer' }>();
+                const payload = await request.jwtVerify<{ sub: string; role: 'super_admin' | 'operator' | 'customer' }>();
                 request.user = { id: payload.sub, role: payload.role };
             } catch {
                 throw new UnauthorizedError();
@@ -44,7 +44,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
         'adminOnly',
         async (request: FastifyRequest, reply: FastifyReply) => {
             await fastify.authenticate(request, reply);
-            if (request.user.role !== 'admin') {
+            if (request.user.role !== 'super_admin' && request.user.role !== 'operator') {
                 throw new ForbiddenError('Admin access required');
             }
         },

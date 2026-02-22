@@ -13,3 +13,4 @@ export * from './schema/review.js';
 export * from './schema/combo.js';
 export * from './schema/inventory.js';
 export * from './schema/refund.js';
+export * from './schema/otp.js';

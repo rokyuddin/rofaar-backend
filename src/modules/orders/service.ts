@@ -24,7 +24,7 @@ export class OrderService {
         return order;
     }
 
-    async create(userId: string, data: { addressId: string; paymentMethod: any; couponCode?: string }) {
+    async create(userId: string, data: { addressId: string; paymentMethod: any; couponCode?: string | undefined }) {
         const { addressId, paymentMethod, couponCode } = data;
 
         const cart = await db.query.cartItems.findMany({

@@ -22,31 +22,130 @@ Standard Success Response:
 "data": {}
 }
 
+# User Roles & Entities
+
+The `users` table is the central identity table of the system. Every person who interacts with Rofaar—whether a customer, operator, or super_admin—exists in this single table. It stores basic authentication and account information such as name, phone (unique identifier), optional email, password hash, role, and account status.
+
+The `role` field determines what the user is allowed to do (authorization), while the `status` field controls whether the account is active, suspended, or blocked. This design keeps authentication unified, makes role changes easy (for example promoting a customer to operator), and allows the system to scale in the future without creating separate user tables.
+
+---
+
 # 1. AUTH APIs
 
-## 1.1 Register User
+## 1.1 Customer Authentication
 
-POST /auth/register
+### 1.1.1 Register Customer
+POST /auth/customer/register
 
 Body:
 {
 "name": "string",
-"email": "string",
+"phone": "string",
 "password": "string"
 }
 
 Response:
 {
 "success": true,
-"user": {...},
-"token": "jwt"
+"message": "OTP sent to phone number"
+}
+
+### 1.1.2 Verify OTP (Customer Registration)
+POST /auth/customer/verify-otp
+
+Body:
+{
+"phone": "string",
+"otp": "string"
+}
+
+Response:
+{
+"success": true,
+"message": "Registration successful",
+"token": "jwt",
+"user": {...}
+}
+
+### 1.1.3 Customer Login
+POST /auth/customer/login
+
+Body:
+{
+"phone": "string",
+"password": "string"
+}
+
+Response:
+{
+"success": true,
+"token": "jwt",
+"user": {...}
+}
+
+### 1.1.4 Customer Forgot Password (Send OTP)
+POST /auth/customer/forgot-password
+
+Body:
+{
+"phone": "string"
+}
+
+Response:
+{
+"success": true,
+"message": "OTP sent to phone number"
+}
+
+### 1.1.5 Customer Reset Password
+POST /auth/customer/reset-password
+
+Body:
+{
+"phone": "string",
+"otp": "string",
+"newPassword": "string"
+}
+
+Response:
+{
+"success": true,
+"message": "Password updated successfully"
+}
+
+### 1.1.6 Customer Change Password (Logged In)
+POST /auth/customer/change-password
+(Requires Bearer Token)
+
+Body:
+{
+"oldPassword": "string",
+"newPassword": "string"
+}
+
+Response:
+{
+"success": true,
+"message": "Password changed successfully"
+}
+
+### 1.1.7 Get Current Customer
+GET /auth/customer/me
+
+Response:
+{
+"id": "uuid",
+"name": "string",
+"phone": "string",
+"role": "customer"
 }
 
 ---
 
-## 1.2 Login
+## 1.2 Operator Authentication
 
-POST /auth/login
+### 1.2.1 Operator Login
+POST /auth/operator/login
 
 Body:
 {
@@ -58,21 +157,19 @@ Response:
 {
 "success": true,
 "token": "jwt",
-"user": {...}
+"operator": {...}
 }
 
----
-
-## 1.3 Get Current User
-
-GET /auth/me
+### 1.2.2 Get Current Operator
+GET /auth/operator/me
 
 Response:
 {
 "id": "uuid",
 "name": "string",
 "email": "string",
-"role": "admin | customer"
+"permissions": ["manage_products", "manage_orders", "manage_users"],
+"role": "operator"
 }
 
 ---

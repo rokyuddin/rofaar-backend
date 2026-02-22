@@ -6,9 +6,11 @@ export class ProductService {
     async list(filters: {
         page: number;
         limit: number;
-        minPrice?: number;
-        maxPrice?: number;
-        search?: string;
+        minPrice?: number | undefined;
+        maxPrice?: number | undefined;
+        search?: string | undefined;
+        category?: string | undefined;
+        tag?: string | undefined;
     }) {
         const { page, limit, minPrice, maxPrice, search } = filters;
         const offset = (page - 1) * limit;
