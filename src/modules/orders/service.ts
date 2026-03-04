@@ -1,12 +1,15 @@
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, desc, count } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import { orders, orderItems } from '@/db/schema/order.js';
 import { cartItems } from '@/db/schema/cart.js';
 import { products } from '@/db/schema/product.js';
 import { coupons } from '@/db/schema/coupon.js';
 import { NotFoundError, BadRequestError } from '@/shared/errors.js';
+import type { OrderPaginationQuery } from './schema.js';
 
 export class OrderService {
+    // ─── User Methods ────────────────────────────────────────────────────────
+
     async list(userId: string) {
         return db.query.orders.findMany({
             where: eq(orders.userId, userId),
@@ -62,7 +65,8 @@ export class OrderService {
                 userId,
                 addressId,
                 couponId,
-                paymentMethod,
+                paymentMethod: (paymentMethod === 'cod' ? 'cod' : 'on_air') as any,
+                paymentType: 'full',
                 subtotal: subtotal.toFixed(2),
                 discountAmount: discountAmount.toFixed(2),
                 total: total.toFixed(2),
@@ -86,8 +90,68 @@ export class OrderService {
 
             await tx.delete(cartItems).where(eq(cartItems.userId, userId));
 
+            // Increment coupon usage if used
+            if (couponId) {
+                await tx.update(coupons)
+                    .set({ usageCount: sql`${coupons.usageCount} + 1` })
+                    .where(eq(coupons.id, couponId));
+            }
+
             return o!;
         });
+    }
+
+    // ─── Admin Methods ───────────────────────────────────────────────────────
+
+    async listAll(params: OrderPaginationQuery) {
+        const { page = 1, limit = 10, status } = params;
+        const offset = (page - 1) * limit;
+
+        const where = status ? eq(orders.status, status) : undefined;
+
+        const [rows, [totalResult]] = await Promise.all([
+            db.query.orders.findMany({
+                where,
+                limit,
+                offset,
+                with: { user: true, address: true },
+                orderBy: [desc(orders.createdAt)],
+            }),
+            db.select({ count: count() }).from(orders).where(where),
+        ]);
+
+        return { rows, total: totalResult?.count ?? 0 };
+    }
+
+    async getRecentOrders(limit = 10) {
+        return db.query.orders.findMany({
+            limit,
+            with: { user: true, address: true },
+            orderBy: [desc(orders.createdAt)],
+        });
+    }
+
+    async getAdminById(orderId: string) {
+        const order = await db.query.orders.findFirst({
+            where: eq(orders.id, orderId),
+            with: { items: { with: { product: true } }, address: true, user: true, coupon: true },
+        });
+        if (!order) throw new NotFoundError('Order');
+        return order;
+    }
+
+    async updateStatus(id: string, data: { status?: any; paymentStatus?: any }) {
+        const [order] = await db
+            .update(orders)
+            .set({
+                ...data,
+                updatedAt: new Date(),
+            })
+            .where(eq(orders.id, id))
+            .returning();
+
+        if (!order) throw new NotFoundError('Order');
+        return order;
     }
 }
 

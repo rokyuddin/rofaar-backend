@@ -6,6 +6,8 @@ const envSchema = z.object({
     DATABASE_URL: z.string().url(),
     JWT_SECRET: z.string().min(32),
     JWT_EXPIRES_IN: z.string().default('7d'),
+    ENABLE_SWAGGER: z.string().optional().default('true'),
+    API_HOST: z.string().optional().default('localhost:3000'),
 });
 
 const parsed = envSchema.safeParse(process.env);

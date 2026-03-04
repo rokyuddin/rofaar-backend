@@ -60,6 +60,12 @@ export class CartService {
             .delete(cartItems)
             .where(and(eq(cartItems.userId, userId), eq(cartItems.productId, productId)));
     }
+
+    async clearCart(userId: string) {
+        await db
+            .delete(cartItems)
+            .where(eq(cartItems.userId, userId));
+    }
 }
 
 export const cartService = new CartService();

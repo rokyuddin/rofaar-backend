@@ -1,6 +1,7 @@
 import { eq, and, gte, lte, ilike, count, sql } from 'drizzle-orm';
 import { db } from '@/config/db.js';
-import { products } from '@/db/schema/product.js';
+import { products, productImages } from '@/db/schema/product.js';
+import type { CreateProductBody, UpdateProductBody, DeleteProductBody } from './schema.js';
 
 export class ProductService {
     async list(filters: {
@@ -45,6 +46,65 @@ export class ProductService {
                 tags: { with: { tag: true } },
             },
         });
+    }
+
+    async create(data: CreateProductBody) {
+        return await db.transaction(async (tx) => {
+            const [product] = await tx.insert(products).values({
+                name: data.name,
+                slug: data.slug,
+                description: data.description,
+                price: data.price,
+                stock: data.stock,
+                categoryId: data.categoryId,
+            }).returning();
+
+            if (data.images?.length) {
+                await tx.insert(productImages).values(
+                    data.images.map((img) => ({
+                        productId: product!.id,
+                        url: img.url,
+                        sortOrder: img.sortOrder,
+                    }))
+                );
+            }
+
+            return product;
+        });
+    }
+
+    async update(data: UpdateProductBody) {
+        return await db.transaction(async (tx) => {
+            const { id, images, ...updateData } = data;
+            const [product] = await tx.update(products)
+                .set(updateData)
+                .where(eq(products.id, id))
+                .returning();
+
+            if (!product) return null;
+
+            if (images !== undefined) {
+                await tx.delete(productImages).where(eq(productImages.productId, id));
+                if (images.length) {
+                    await tx.insert(productImages).values(
+                        images.map((img) => ({
+                            productId: id,
+                            url: img.url,
+                            sortOrder: img.sortOrder,
+                        }))
+                    );
+                }
+            }
+
+            return product;
+        });
+    }
+
+    async delete(data: DeleteProductBody) {
+        const [product] = await db.delete(products)
+            .where(eq(products.id, data.id))
+            .returning();
+        return product;
     }
 }
 

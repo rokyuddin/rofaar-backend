@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { buildApp } from '@/app.js';
 import { env } from '@/config/env.js';
 
@@ -33,4 +34,6 @@ async function start() {
     }
 }
 
+
 void start();
+

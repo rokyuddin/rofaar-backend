@@ -31,6 +31,25 @@ pnpm dev
 
 Server starts at `http://localhost:3000`. Health check: `GET /health`.
 
+## API Documentation
+
+Interactive API documentation is available via Swagger UI:
+
+- **Development:** `http://localhost:3000/documentation`
+- **Production:** `https://api.rofaar.com/documentation`
+
+### Features
+
+- 📖 Interactive OpenAPI 3.0 documentation
+- 🔐 JWT authentication directly in the UI
+- 🧪 Test endpoints directly from the browser
+- 📥 Download OpenAPI spec in JSON format
+- 🏷️ Endpoints organized by feature (Authentication, Products, Orders, etc.)
+
+### Disabling Swagger
+
+To disable Swagger in production, set `ENABLE_SWAGGER=false` in your `.env` file.
+
 ## Project Structure
 
 ```

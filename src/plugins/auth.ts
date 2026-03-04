@@ -3,6 +3,7 @@ import jwt from '@fastify/jwt';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { env } from '@/config/env.js';
 import { UnauthorizedError, ForbiddenError } from '@/shared/errors.js';
+import { ZodTypeProvider } from 'fastify-type-provider-zod';
 
 // ─── Type augmentation ────────────────────────────────────────────────────────
 
@@ -22,7 +23,10 @@ declare module 'fastify' {
 
 // ─── Plugin ───────────────────────────────────────────────────────────────────
 
-const authPlugin: FastifyPluginAsync = async (fastify) => {
+const authRoutes: FastifyPluginAsync = async (fastify) => {
+    console.log('Registering authRoutes, authenticate exists:', !!fastify.authenticate);
+    const f = fastify.withTypeProvider<ZodTypeProvider>();
+
     await fastify.register(jwt, {
         secret: env.JWT_SECRET,
         sign: { expiresIn: env.JWT_EXPIRES_IN },
@@ -30,6 +34,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
 
     fastify.decorate(
         'authenticate',
+
         async (request: FastifyRequest, _reply: FastifyReply) => {
             try {
                 const payload = await request.jwtVerify<{ sub: string; role: 'super_admin' | 'operator' | 'customer' }>();
@@ -51,4 +56,4 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
     );
 };
 
-export default fp(authPlugin, { name: 'auth' });
+export default fp(authRoutes, { name: 'auth' });

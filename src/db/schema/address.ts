@@ -19,10 +19,11 @@ export const addresses = pgTable('addresses', {
     label: varchar('label', { length: 50 }).notNull().default('Home'), // Home, Office...
     recipientName: varchar('recipient_name', { length: 255 }).notNull(),
     phone: varchar('phone', { length: 20 }).notNull(),
-    addressLine: varchar('address_line', { length: 500 }).notNull(),
+    altPhone: varchar('alt_phone', { length: 20 }),
+    address: varchar('address', { length: 500 }).notNull(),
     city: varchar('city', { length: 100 }).notNull(),
-    district: varchar('district', { length: 100 }).notNull(),
-    postalCode: varchar('postal_code', { length: 10 }),
+    area: varchar('area', { length: 100 }).notNull(), // upozila
+    zone: varchar('zone', { length: 100 }), // union
     isDefault: boolean('is_default').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

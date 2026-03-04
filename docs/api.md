@@ -1,5 +1,21 @@
 # Rofaar E-commerce API Documentation (v1 - Updated with Advanced Features)
 
+## 🚀 Interactive Documentation
+
+For interactive API documentation with the ability to test endpoints directly, visit:
+
+- **Swagger UI:** `http://localhost:3000/documentation` (Development)
+- **Swagger UI:** `https://api.rofaar.com/documentation` (Production)
+
+### Features
+
+- ✅ Try out endpoints directly in the browser
+- ✅ JWT authentication built-in
+- ✅ Downloadable OpenAPI specification
+- ✅ Always up-to-date with the codebase
+
+---
+
 Base URL:
 
 ```
