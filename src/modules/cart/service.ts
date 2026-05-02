@@ -61,10 +61,8 @@ export class CartService {
             .where(and(eq(cartItems.userId, userId), eq(cartItems.productId, productId)));
     }
 
-    async clearCart(userId: string) {
-        await db
-            .delete(cartItems)
-            .where(eq(cartItems.userId, userId));
+    async clear(userId: string) {
+        await db.delete(cartItems).where(eq(cartItems.userId, userId));
     }
 }
 

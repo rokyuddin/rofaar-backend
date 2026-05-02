@@ -13,6 +13,8 @@ import { categories } from './category.js';
 import { productTags } from './tag.js';
 import { reviews } from './review.js';
 import { inventoryLogs } from './inventory.js';
+import { brands } from './brand.js';
+
 
 // ─── Table ───────────────────────────────────────────────────────────────────
 
@@ -25,7 +27,9 @@ export const products = pgTable('products', {
     stock: integer('stock').notNull().default(0),
     isActive: boolean('is_active').notNull().default(true),
     categoryId: uuid('category_id').references(() => categories.id, { onDelete: 'set null' }),
+    brandId: uuid('brand_id').references(() => brands.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -44,7 +48,9 @@ export const productImages = pgTable('product_images', {
 
 export const productsRelations = relations(products, ({ one, many }) => ({
     category: one(categories, { fields: [products.categoryId], references: [categories.id] }),
+    brand: one(brands, { fields: [products.brandId], references: [brands.id] }),
     images: many(productImages),
+
     tags: many(productTags),
     reviews: many(reviews),
     inventoryLogs: many(inventoryLogs),

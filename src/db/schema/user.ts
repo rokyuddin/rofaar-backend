@@ -4,30 +4,21 @@ import {
     text,
     varchar,
     timestamp,
-    pgEnum,
     boolean,
     index,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
-// ─── Enums ────────────────────────────────────────────────────────────────────
-
-export const roleEnum = pgEnum('role', ['customer', 'operator', 'super_admin']);
-export const statusEnum = pgEnum('status', ['active', 'suspended', 'blocked', 'pending_verification', 'deleted']);
-
 // ─── Table ───────────────────────────────────────────────────────────────────
 
 export const users = pgTable('users', {
     id: uuid('id').primaryKey().defaultRandom(),
-    name: varchar('name', { length: 120 }).notNull(),
-    phone: varchar('phone', { length: 20 }).notNull().unique(),
-    email: varchar('email', { length: 150 }),
-    passwordHash: text('password_hash'),
-    role: roleEnum('role').notNull().default('customer'),
-    status: statusEnum('status').notNull().default('active'),
-    isPhoneVerified: boolean('is_phone_verified').notNull().default(false),
-    isEmailVerified: boolean('is_email_verified').notNull().default(false),
-    lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+    name: varchar('name', { length: 255 }).notNull(),
+    email: varchar('email', { length: 255 }).notNull().unique(),
+    passwordHash: text('password_hash').notNull(),
+    roleId: uuid('role_id').notNull(), // FK → roles.id (references added via relations)
+    isVerified: boolean('is_verified').notNull().default(false),
+    isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => {
@@ -37,10 +28,12 @@ export const users = pgTable('users', {
     }
 });
 
-// ─── Relations (resolved at runtime via db/index.ts barrel) ──────────────────
-// Circular deps are safe here because Drizzle relations() is evaluated lazily.
+// ─── Relations ────────────────────────────────────────────────────────────────
+// Resolved at runtime to avoid circular import issues.
 
-export const usersRelations = relations(users, ({ many }) => {
+export const usersRelations = relations(users, ({ one, many }) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { roles } = require('./rbac.js') as typeof import('./rbac.js');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { addresses } = require('./address.js') as typeof import('./address.js');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -55,6 +48,10 @@ export const usersRelations = relations(users, ({ many }) => {
     const { refunds } = require('./refund.js') as typeof import('./refund.js');
 
     return {
+        role: one(roles, {
+            fields: [users.roleId],
+            references: [roles.id],
+        }),
         addresses: many(addresses),
         orders: many(orders),
         cartItems: many(cartItems),

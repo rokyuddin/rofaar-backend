@@ -3,21 +3,45 @@ import jwt from '@fastify/jwt';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { env } from '@/config/env.js';
 import { UnauthorizedError, ForbiddenError } from '@/shared/errors.js';
-import { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { permissionService, type Action, type Resource, type UserPermissions } from '@/shared/permission.service.js';
 
 // ─── Type augmentation ────────────────────────────────────────────────────────
 
 declare module '@fastify/jwt' {
     interface FastifyJWT {
-        payload: { sub: string; role: 'customer' | 'operator' | 'super_admin' };
-        user: { id: string; role: 'customer' | 'operator' | 'super_admin' };
+        payload: { sub: string };
+        user: { id: string };
     }
 }
 
 declare module 'fastify' {
+    interface FastifyRequest {
+        /**
+         * Populated after `fastify.authenticate` runs.
+         * Contains full role name + resolved permissions list.
+         */
+        userPermissions: UserPermissions;
+    }
     interface FastifyInstance {
+        /** Verify the JWT and populate request.userPermissions. */
         authenticate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
-        adminOnly: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+
+        /**
+         * Factory that returns a preHandler verifying authentication AND a specific permission.
+         *
+         * Usage in route:
+         *   preHandler: [fastify.requirePermission('create', 'products')]
+         */
+        requirePermission: (
+            action: Action,
+            resource: Resource,
+        ) => (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+
+        /**
+         * Convenience helper — same as requirePermission('manage', '*').
+         * Only super_admin role passes by default.
+         */
+        superAdminOnly: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     }
 }
 
@@ -32,28 +56,42 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         sign: { expiresIn: env.JWT_EXPIRES_IN },
     });
 
-    fastify.decorate(
-        'authenticate',
+    // ── authenticate ──────────────────────────────────────────────────────────
+    fastify.decorate('authenticate', async (request: FastifyRequest, _reply: FastifyReply) => {
+        try {
+            const payload = await request.jwtVerify<{ sub: string }>();
+            request.user = { id: payload.sub };
+        } catch {
+            throw new UnauthorizedError();
+        }
 
-        async (request: FastifyRequest, _reply: FastifyReply) => {
-            try {
-                const payload = await request.jwtVerify<{ sub: string; role: 'super_admin' | 'operator' | 'customer' }>();
-                request.user = { id: payload.sub, role: payload.role };
-            } catch {
-                throw new UnauthorizedError();
-            }
-        },
+        // Load full permissions from DB and attach to request
+        const perms = await permissionService.getUserPermissions(request.user.id);
+        if (!perms) throw new UnauthorizedError('Account not found or inactive');
+        request.userPermissions = perms;
+    });
+
+    // ── requirePermission ─────────────────────────────────────────────────────
+    fastify.decorate(
+        'requirePermission',
+        (action: Action, resource: Resource) =>
+            async (request: FastifyRequest, reply: FastifyReply) => {
+                await fastify.authenticate(request, reply);
+                if (!permissionService.can(request.userPermissions, action, resource)) {
+                    throw new ForbiddenError(
+                        `You do not have permission to ${action} ${resource}`,
+                    );
+                }
+            },
     );
 
-    fastify.decorate(
-        'adminOnly',
-        async (request: FastifyRequest, reply: FastifyReply) => {
-            await fastify.authenticate(request, reply);
-            if (request.user.role !== 'super_admin' && request.user.role !== 'operator') {
-                throw new ForbiddenError('Admin access required');
-            }
-        },
-    );
+    // ── superAdminOnly ────────────────────────────────────────────────────────
+    fastify.decorate('superAdminOnly', async (request: FastifyRequest, reply: FastifyReply) => {
+        await fastify.authenticate(request, reply);
+        if (!permissionService.can(request.userPermissions, 'manage', '*')) {
+            throw new ForbiddenError('Super admin access required');
+        }
+    });
 };
 
 export default fp(authRoutes, { name: 'auth' });

@@ -1,59 +1,59 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import fp from 'fastify-plugin';
-import { categoryService } from './service.js';
-import { CreateCategorySchema, UpdateCategorySchema } from './schema.js';
+import { brandService } from './service.js';
+import { CreateBrandSchema, UpdateBrandSchema } from './schema.js';
 import { success } from '@/shared/response.js';
 import { IdParamSchema, SlugParamSchema } from '@/shared/types.js';
 
-const categoryRoutes: FastifyPluginAsync = async (fastify) => {
+const brandRoutes: FastifyPluginAsync = async (fastify) => {
     const f = fastify.withTypeProvider<ZodTypeProvider>();
 
     // ─── Public Routes ────────────────────────────────────────────────────────
 
-    f.get('/categories', {
+    f.get('/brands', {
         handler: async () => {
-            const result = await categoryService.list();
+            const result = await brandService.list();
             return success(result);
         },
     });
 
-    f.get('/categories/:slug', {
+    f.get('/brands/:slug', {
         schema: { params: SlugParamSchema },
         handler: async (request) => {
-            const result = await categoryService.getBySlug(request.params.slug);
+            const result = await brandService.getBySlug(request.params.slug);
             return success(result);
         },
     });
 
     // ─── Admin Routes ─────────────────────────────────────────────────────────
 
-    f.post('/admin/categories', {
-        preHandler: [fastify.requirePermission('create', 'categories')],
-        schema: { body: CreateCategorySchema },
+    f.post('/admin/brands', {
+        preHandler: [fastify.requirePermission('create', 'brands')],
+        schema: { body: CreateBrandSchema },
         handler: async (request, reply) => {
-            const result = await categoryService.create(request.body);
+            const result = await brandService.create(request.body);
             return reply.code(201).send(success(result));
         },
     });
 
-    f.put('/admin/categories/:id', {
-        preHandler: [fastify.requirePermission('update', 'categories')],
-        schema: { params: IdParamSchema, body: UpdateCategorySchema },
+    f.put('/admin/brands/:id', {
+        preHandler: [fastify.requirePermission('update', 'brands')],
+        schema: { params: IdParamSchema, body: UpdateBrandSchema },
         handler: async (request) => {
-            const result = await categoryService.update(request.params.id, request.body);
+            const result = await brandService.update(request.params.id, request.body);
             return success(result);
         },
     });
 
-    f.delete('/admin/categories/:id', {
-        preHandler: [fastify.requirePermission('delete', 'categories')],
+    f.delete('/admin/brands/:id', {
+        preHandler: [fastify.requirePermission('delete', 'brands')],
         schema: { params: IdParamSchema },
         handler: async (request) => {
-            await categoryService.delete(request.params.id);
-            return success(null, 'Category deleted successfully');
+            await brandService.delete(request.params.id);
+            return success(null, 'Brand deleted successfully');
         },
     });
 };
 
-export default fp(categoryRoutes, { name: 'category-routes' });
+export default fp(brandRoutes, { name: 'brand-routes' });

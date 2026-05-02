@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PaginationQuerySchema } from '@/shared/types.js';
+import { PaginationQuerySchema } from '@/shared/types.js';
 
 export const CreateOrderSchema = z.object({
     addressId: z.string().uuid(),
@@ -7,16 +8,12 @@ export const CreateOrderSchema = z.object({
     couponCode: z.string().optional(),
 });
 
+export const OrderParamsSchema = PaginationQuerySchema.extend({
+    status: z.string().optional(),
+    userId: z.string().uuid().optional(),
+});
+
 export const UpdateOrderStatusSchema = z.object({
-    id: z.string().uuid(),
-    status: z.enum(['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'returned']).optional(),
-    paymentStatus: z.enum(['unpaid', 'paid', 'partial', 'failed', 'refunded']).optional(),
+    status: z.enum(['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'returned']),
+    paymentStatus: z.enum(['unpaid', 'paid', 'failed', 'refunded']).optional(),
 });
-
-export const OrderPaginationSchema = PaginationQuerySchema.extend({
-    status: z.enum(['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'returned']).optional(),
-});
-
-export type CreateOrderBody = z.infer<typeof CreateOrderSchema>;
-export type UpdateOrderStatusBody = z.infer<typeof UpdateOrderStatusSchema>;
-export type OrderPaginationQuery = z.infer<typeof OrderPaginationSchema>;

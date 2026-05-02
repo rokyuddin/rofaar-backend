@@ -1,109 +1,69 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import fp from 'fastify-plugin';
 import { reviewService } from './service.js';
-import { success, paginated } from '@/shared/response.js';
-import { createSwaggerConfig } from '@/shared/swagger.js';
+import { CreateReviewSchema, UpdateReviewSchema } from './schema.js';
+import { success } from '@/shared/response.js';
 import { IdParamSchema } from '@/shared/types.js';
-import {
-    CreateReviewSchema,
-    ReviewPaginationSchema,
-    DeleteReviewSchema,
-} from './schema.js';
-import type {
-    CreateReviewBody,
-    ReviewPaginationQuery,
-    DeleteReviewBody,
-} from './schema.js';
+import { z } from 'zod';
 
 const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     // ─── User Routes ─────────────────────────────────────────────────────────
     fastify.register(async (instance) => {
         const app = instance.withTypeProvider<ZodTypeProvider>();
 
-        // POST /reviews/create
-        app.post('/create', {
-            preHandler: [fastify.authenticate],
-            schema: {
-                ...createSwaggerConfig(['User | Reviews'], 'Create Review', 'Submit a product review', true),
-                body: CreateReviewSchema,
-            },
-            handler: async (request, reply) => {
-                const review = await reviewService.create(request.user.id, request.body as CreateReviewBody);
-                return reply.code(201).send(success(review, 'Review submitted successfully'));
-            },
-        });
+    // ─── Public Routes ────────────────────────────────────────────────────────
 
-        // GET /reviews/product/:id
-        app.get('/product/:id', {
-            schema: {
-                ...createSwaggerConfig(['User | Reviews'], 'Product Reviews', 'Get all reviews for a product', false),
-                params: IdParamSchema,
-            },
-            handler: async (request) => {
-                const result = await reviewService.listByProduct(request.params.id);
-                return success(result);
-            },
-        });
+    f.get('/products/:id/reviews', {
+        schema: { params: IdParamSchema },
+        handler: async (request) => {
+            const [reviews, stats] = await Promise.all([
+                reviewService.listByProduct(request.params.id),
+                reviewService.getStats(request.params.id),
+            ]);
+            return success({ reviews, stats });
+        },
+    });
 
-        // GET /reviews/mine
-        app.get('/mine', {
-            preHandler: [fastify.authenticate],
-            schema: {
-                ...createSwaggerConfig(['User | Reviews'], 'My Reviews', 'Get current user\'s review history', true),
-            },
-            handler: async (request) => {
-                const result = await reviewService.listUserReviews(request.user.id);
-                return success(result);
-            },
-        });
-    }, { prefix: '/reviews' });
+    // ─── Protected Routes (User) ──────────────────────────────────────────────
 
-    // ─── Admin Routes ────────────────────────────────────────────────────────
-    fastify.register(async (instance) => {
-        const app = instance.withTypeProvider<ZodTypeProvider>();
-        app.addHook('onRequest', fastify.adminOnly);
+    f.post('/reviews', {
+        preHandler: [fastify.authenticate],
+        schema: { body: CreateReviewSchema },
+        handler: async (request, reply) => {
+            const result = await reviewService.create(request.user.id, request.body);
+            return reply.code(201).send(success(result));
+        },
+    });
 
-        // GET /admin/reviews/list
-        app.get('/list', {
-            schema: {
-                ...createSwaggerConfig(['Admin | Reviews'], 'List All Reviews', 'Get all reviews with pagination', true),
-                querystring: ReviewPaginationSchema,
-            },
-            handler: async (request) => {
-                const query = request.query as ReviewPaginationQuery;
-                const { rows, total } = await reviewService.listAll(query);
-                return paginated(rows, {
-                    page: query.page,
-                    limit: query.limit,
-                    total,
-                });
-            },
-        });
+    f.put('/reviews/:id', {
+        preHandler: [fastify.authenticate],
+        schema: { params: IdParamSchema, body: UpdateReviewSchema },
+        handler: async (request) => {
+            const result = await reviewService.update(request.user.id, request.params.id, request.body);
+            return success(result);
+        },
+    });
 
-        // GET /admin/reviews/recent
-        app.get('/recent', {
-            schema: {
-                ...createSwaggerConfig(['Admin | Reviews'], 'Recent Reviews', 'Get recent reviews for dashboard', true),
-            },
-            handler: async () => {
-                const result = await reviewService.getRecentReviews();
-                return success(result);
-            },
-        });
+    f.delete('/reviews/:id', {
+        preHandler: [fastify.authenticate],
+        schema: { params: IdParamSchema },
+        handler: async (request) => {
+            await reviewService.delete(request.params.id, request.user.id);
+            return success(null, 'Review deleted successfully');
+        },
+    });
 
-        // DELETE /admin/reviews/delete
-        app.delete('/delete', {
-            schema: {
-                ...createSwaggerConfig(['Admin | Reviews'], 'Delete Review', 'Remove a review', true),
-                body: DeleteReviewSchema,
-            },
-            handler: async (request) => {
-                const { id } = request.body as DeleteReviewBody;
-                await reviewService.delete(id);
-                return success(null, 'Review deleted');
-            },
-        });
-    }, { prefix: '/admin/reviews' });
+    // ─── Admin Routes ─────────────────────────────────────────────────────────
+
+    f.delete('/admin/reviews/:id', {
+        preHandler: [fastify.requirePermission('delete', 'reviews')],
+        schema: { params: IdParamSchema },
+        handler: async (request) => {
+            await reviewService.delete(request.params.id);
+            return success(null, 'Review deleted by admin');
+        },
+    });
 };
 
-export default reviewsRoutes;
+export default fp(reviewsRoutes, { name: 'reviews-routes' });

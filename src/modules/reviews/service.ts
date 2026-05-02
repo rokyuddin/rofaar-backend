@@ -1,81 +1,67 @@
-import { eq, and, desc, count } from 'drizzle-orm';
+import { eq, and, desc, count, avg } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import { reviews } from '@/db/schema/review.js';
+import { products } from '@/db/schema/product.js';
 import { NotFoundError } from '@/shared/errors.js';
-import type { CreateReviewBody, ReviewPaginationQuery } from './schema.js';
 
 export class ReviewService {
-    // ─── User Methods ────────────────────────────────────────────────────────
-
-    async create(userId: string, data: CreateReviewBody) {
-        const [review] = await db
-            .insert(reviews)
-            .values({
-                userId,
-                productId: data.productId,
-                rating: data.rating,
-                comment: data.comment,
-            })
-            .returning();
-
-        return review!;
-    }
-
     async listByProduct(productId: string) {
         return db.query.reviews.findMany({
             where: eq(reviews.productId, productId),
-            with: { user: true },
+            with: { user: { columns: { name: true } } },
             orderBy: [desc(reviews.createdAt)],
         });
     }
 
-    async listUserReviews(userId: string) {
-        return db.query.reviews.findMany({
-            where: eq(reviews.userId, userId),
-            with: { product: true },
-            orderBy: [desc(reviews.createdAt)],
+    async getStats(productId: string) {
+        const stats = await db
+            .select({
+                averageRating: avg(reviews.rating),
+                totalReviews: count(reviews.id),
+            })
+            .from(reviews)
+            .where(eq(reviews.productId, productId));
+        
+        return {
+            averageRating: Number(stats[0]?.averageRating ?? 0).toFixed(1),
+            totalReviews: Number(stats[0]?.totalReviews ?? 0),
+        };
+    }
+
+    async create(userId: string, data: { productId: string; rating: number; comment?: string }) {
+        const product = await db.query.products.findFirst({
+            where: eq(products.id, data.productId),
         });
+        if (!product) throw new NotFoundError('Product');
+
+        const [review] = await db
+            .insert(reviews)
+            .values({ ...data, userId })
+            .returning();
+        
+        return review!;
     }
 
-    // ─── Admin Methods ───────────────────────────────────────────────────────
-
-    async listAll(params: ReviewPaginationQuery) {
-        const { page = 1, limit = 10, productId, rating } = params;
-        const offset = (page - 1) * limit;
-
-        const where = and(
-            productId ? eq(reviews.productId, productId) : undefined,
-            rating ? eq(reviews.rating, rating) : undefined
-        );
-
-        const [rows, [totalResult]] = await Promise.all([
-            db.query.reviews.findMany({
-                where,
-                limit,
-                offset,
-                with: { user: true, product: true },
-                orderBy: [desc(reviews.createdAt)],
-            }),
-            db.select({ count: count() }).from(reviews).where(where),
-        ]);
-
-        return { rows, total: totalResult?.count ?? 0 };
+    async update(userId: string, id: string, data: any) {
+        const [review] = await db
+            .update(reviews)
+            .set({ ...data, updatedAt: new Date() })
+            .where(and(eq(reviews.id, id), eq(reviews.userId, userId)))
+            .returning();
+        
+        if (!review) throw new NotFoundError('Review');
+        return review;
     }
 
-    async getRecentReviews(limit = 10) {
-        return db.query.reviews.findMany({
-            limit,
-            with: { user: true, product: true },
-            orderBy: [desc(reviews.createdAt)],
-        });
-    }
+    async delete(id: string, userId?: string) {
+        const conditions = [eq(reviews.id, id)];
+        if (userId) conditions.push(eq(reviews.userId, userId));
 
-    async delete(id: string) {
         const [review] = await db
             .delete(reviews)
-            .where(eq(reviews.id, id))
+            .where(and(...conditions))
             .returning();
-
+        
         if (!review) throw new NotFoundError('Review');
         return review;
     }

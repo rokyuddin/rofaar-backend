@@ -15,6 +15,12 @@ import swaggerPlugin from '@/plugins/swagger.js';
 import authRoutes from '@/modules/auth/routes.js';
 import productRoutes from '@/modules/products/routes.js';
 import categoryRoutes from '@/modules/categories/routes.js';
+import brandRoutes from '@/modules/brands/routes.js';
+import bannerRoutes from '@/modules/banners/routes.js';
+import advertisementRoutes from '@/modules/advertisements/routes.js';
+import contactRoutes from '@/modules/contact/routes.js';
+
+
 import cartRoutes from '@/modules/cart/routes.js';
 import orderRoutes from '@/modules/orders/routes.js';
 import wishlistRoutes from '@/modules/wishlist/routes.js';
@@ -54,19 +60,25 @@ export async function buildApp() {
         uptime: process.uptime(),
     }));
 
-    // ─── Route registration ──────────────────────────────────────────────────
-    await app.register(authRoutes, { prefix: `${apiVersion}/auth` });
-    await app.register(categoryRoutes, { prefix: `${apiVersion}` });
-    await app.register(productRoutes, { prefix: `${apiVersion}` });
-    await app.register(cartRoutes, { prefix: `${apiVersion}` });
-    await app.register(orderRoutes, { prefix: `${apiVersion}` });
-    await app.register(wishlistRoutes, { prefix: `${apiVersion}` });
-    await app.register(addressRoutes, { prefix: `${apiVersion}` });
-    await app.register(couponRoutes, { prefix: `${apiVersion}` });
-    await app.register(comboRoutes, { prefix: `${apiVersion}` });
-    await app.register(reviewRoutes, { prefix: `${apiVersion}` });
-    await app.register(paymentRoutes, { prefix: `${apiVersion}` });
-    await app.register(adminRoutes, { prefix: `${apiVersion}` });
+    // ─── API v1 routes ────────────────────────────────────────────────────────
+    await app.register(authRoutes, { prefix: '/api/v1/auth' });
+    await app.register(productRoutes, { prefix: '/api/v1' });
+    await app.register(categoryRoutes, { prefix: '/api/v1' });
+    await app.register(brandRoutes, { prefix: '/api/v1' });
+    await app.register(bannerRoutes, { prefix: '/api/v1' });
+    await app.register(advertisementRoutes, { prefix: '/api/v1' });
+    await app.register(contactRoutes, { prefix: '/api/v1' });
+
+
+    await app.register(cartRoutes, { prefix: '/api/v1' });
+    await app.register(orderRoutes, { prefix: '/api/v1' });
+    await app.register(wishlistRoutes, { prefix: '/api/v1' });
+    await app.register(addressesRoutes, { prefix: '/api/v1' });
+    await app.register(couponRoutes, { prefix: '/api/v1' });
+    await app.register(combosRoutes, { prefix: '/api/v1' });
+    await app.register(reviewsRoutes, { prefix: '/api/v1' });
+    await app.register(adminRoutes, { prefix: '/api/v1' });
+    await app.register(paymentsRoutes, { prefix: '/api/v1' });
 
     return app;
 }

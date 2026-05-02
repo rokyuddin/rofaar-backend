@@ -42,31 +42,9 @@ export const AuthResponseSchema = z.object({
         user: z.object({
             id: z.string().uuid(),
             name: z.string(),
-            phone: z.string(),
-            email: z.string().nullable(),
-            role: z.string(),
-            status: z.string(),
-        }).optional(),
-    }),
-});
+            email: z.string(),
+            role: z.enum(['super_admin', 'admin', 'operator', 'customer']),
 
-// ─── Operator Auth Schemas ──────────────────────────────────────────────────
-
-export const OperatorLoginBodySchema = z.object({
-    email: z.string().email(),
-    password: z.string().min(6),
-});
-
-export const OperatorAuthResponseSchema = z.object({
-    success: z.literal(true),
-    data: z.object({
-        token: z.string(),
-        operator: z.object({
-            id: z.string().uuid(),
-            name: z.string(),
-            email: z.string().nullable(),
-            role: z.string(),
-            status: z.string(),
         }),
     }),
 });

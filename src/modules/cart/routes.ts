@@ -35,18 +35,22 @@ const cartRoutes: FastifyPluginAsync = async (fastify) => {
             },
         });
 
-        // PUT /cart/update/:id
-        app.put('/update/:id', {
-            schema: {
-                ...createSwaggerConfig(['User | Cart'], 'Update Cart Item', 'Update quantity of cart item', true),
-                params: IdParamSchema,
-                body: UpdateCartItemSchema,
-            },
-            handler: async (request) => {
-                const item = await cartService.updateItem(request.user.id, request.params.id, request.body.quantity);
-                return success(item);
-            },
-        });
+    // PUT /cart/:id
+    f.put('/cart/:id', {
+        schema: { params: IdParamSchema, body: UpdateCartItemSchema },
+        handler: async (request) => {
+            const item = await cartService.updateItem(request.user.id, request.params.id, request.body.quantity);
+            return success(item);
+        },
+    });
+
+    // DELETE /cart/clear
+    f.delete('/cart/clear', {
+        handler: async (request, reply) => {
+            await cartService.clear(request.user.id);
+            return reply.code(204).send();
+        },
+    });
 
         // DELETE /cart/remove/:id
         app.delete('/remove/:id', {

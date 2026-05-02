@@ -13,4 +13,8 @@ export * from './schema/review.js';
 export * from './schema/combo.js';
 export * from './schema/inventory.js';
 export * from './schema/refund.js';
-export * from './schema/otp.js';
+export * from './schema/rbac.js';
+export * from './schema/brand.js';
+export * from './schema/marketing.js';
+export * from './schema/contact.js';
+

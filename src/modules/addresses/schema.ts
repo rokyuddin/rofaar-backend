@@ -1,25 +1,26 @@
 import { z } from 'zod';
 
+export const AddressSchema = z.object({
+    id: z.string().uuid(),
+    label: z.string(),
+    recipientName: z.string(),
+    phone: z.string(),
+    addressLine: z.string(),
+    city: z.string(),
+    district: z.string(),
+    postalCode: z.string().nullable(),
+    isDefault: z.boolean(),
+});
+
 export const CreateAddressSchema = z.object({
-    label: z.string().min(1).max(50).default('Home'),
-    name: z.string().min(1).max(255),
-    phone: z.string().min(1).max(20),
-    altPhone: z.string().max(20).optional(),
-    city: z.string().min(1).max(100),
-    area: z.string().min(1).max(100), // upozila
-    zone: z.string().max(100).optional(), // iunion
-    address: z.string().min(1).max(500),
+    label: z.string().min(1).default('Home'),
+    recipientName: z.string().min(1),
+    phone: z.string().min(1),
+    addressLine: z.string().min(1),
+    city: z.string().min(1),
+    district: z.string().min(1),
+    postalCode: z.string().optional(),
     isDefault: z.boolean().default(false),
 });
 
-export const UpdateAddressSchema = CreateAddressSchema.partial().extend({
-    id: z.string().uuid(),
-});
-
-export const DeleteAddressSchema = z.object({
-    id: z.string().uuid(),
-});
-
-export type CreateAddressBody = z.infer<typeof CreateAddressSchema>;
-export type UpdateAddressBody = z.infer<typeof UpdateAddressSchema>;
-export type DeleteAddressBody = z.infer<typeof DeleteAddressSchema>;
+export const UpdateAddressSchema = CreateAddressSchema.partial();

@@ -1,32 +1,58 @@
-import { eq, and, gte, lte, ilike, count, sql } from 'drizzle-orm';
+import { eq, and, gte, lte, ilike, count, sql, desc, asc } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import { products, productImages } from '@/db/schema/product.js';
-import type { CreateProductBody, UpdateProductBody, DeleteProductBody } from './schema.js';
+import { NotFoundError } from '@/shared/errors.js';
 
 export class ProductService {
     async list(filters: {
         page: number;
         limit: number;
-        minPrice?: number | undefined;
-        maxPrice?: number | undefined;
-        search?: string | undefined;
-        category?: string | undefined;
-        tag?: string | undefined;
+        category?: string;
+        brand?: string;
+        minPrice?: number;
+        maxPrice?: number;
+        search?: string;
+        sort?: 'newest' | 'price-low' | 'price-high' | 'popular';
     }) {
-        const { page, limit, minPrice, maxPrice, search } = filters;
+        const { page, limit, category, brand, minPrice, maxPrice, search, sort } = filters;
         const offset = (page - 1) * limit;
 
         const conditions = [eq(products.isActive, true)];
+        if (category) conditions.push(eq(products.categoryId, category));
+        if (brand) conditions.push(eq(products.brandId, brand));
         if (minPrice !== undefined) conditions.push(gte(sql`CAST(${products.price} AS NUMERIC)`, minPrice));
         if (maxPrice !== undefined) conditions.push(lte(sql`CAST(${products.price} AS NUMERIC)`, maxPrice));
         if (search) conditions.push(ilike(products.name, `%${search}%`));
 
+        let orderBy;
+        switch (sort) {
+            case 'price-low':
+                orderBy = [asc(products.price)];
+                break;
+            case 'price-high':
+                orderBy = [desc(products.price)];
+                break;
+            case 'popular':
+                // For now, sorting by stock as a placeholder for popularity
+                orderBy = [desc(products.stock)];
+                break;
+            case 'newest':
+            default:
+                orderBy = [desc(products.createdAt)];
+                break;
+        }
+
         const [rows, totalResult] = await Promise.all([
             db.query.products.findMany({
                 where: and(...conditions),
-                with: { category: true, images: { orderBy: (i, { asc }) => [asc(i.sortOrder)] } },
+                with: { 
+                    category: true, 
+                    brand: true,
+                    images: { orderBy: (i, { asc }) => [asc(i.sortOrder)] } 
+                },
                 limit,
                 offset,
+                orderBy,
             }),
             db.select({ value: count() }).from(products).where(and(...conditions)),
         ]);
@@ -38,73 +64,84 @@ export class ProductService {
     }
 
     async getBySlug(slug: string) {
-        return db.query.products.findFirst({
+        const product = await db.query.products.findFirst({
             where: eq(products.slug, slug),
             with: {
                 category: true,
+                brand: true,
                 images: { orderBy: (i, { asc }) => [asc(i.sortOrder)] },
                 tags: { with: { tag: true } },
             },
         });
+        if (!product) throw new NotFoundError('Product');
+        return product;
     }
 
-    async create(data: CreateProductBody) {
+    async create(data: any) {
+        const { images, ...productData } = data;
+        
         return await db.transaction(async (tx) => {
-            const [product] = await tx.insert(products).values({
-                name: data.name,
-                slug: data.slug,
-                description: data.description,
-                price: data.price,
-                stock: data.stock,
-                categoryId: data.categoryId,
-            }).returning();
-
-            if (data.images?.length) {
+            const [product] = await tx.insert(products).values(productData).returning();
+            
+            if (images && images.length > 0) {
                 await tx.insert(productImages).values(
-                    data.images.map((img) => ({
+                    images.map((img: any) => ({
                         productId: product!.id,
                         url: img.url,
-                        sortOrder: img.sortOrder,
+                        sortOrder: img.sortOrder
                     }))
                 );
             }
-
-            return product;
+            
+            return this.getById(product!.id);
         });
     }
 
-    async update(data: UpdateProductBody) {
+    async update(id: string, data: any) {
+        const { images, ...productData } = data;
+        
         return await db.transaction(async (tx) => {
-            const { id, images, ...updateData } = data;
-            const [product] = await tx.update(products)
-                .set(updateData)
+            const [product] = await tx
+                .update(products)
+                .set({ ...productData, updatedAt: new Date() })
                 .where(eq(products.id, id))
                 .returning();
+            
+            if (!product) throw new NotFoundError('Product');
 
-            if (!product) return null;
-
-            if (images !== undefined) {
+            if (images) {
+                // Simplified: Replace all images
                 await tx.delete(productImages).where(eq(productImages.productId, id));
-                if (images.length) {
+                if (images.length > 0) {
                     await tx.insert(productImages).values(
-                        images.map((img) => ({
+                        images.map((img: any) => ({
                             productId: id,
                             url: img.url,
-                            sortOrder: img.sortOrder,
+                            sortOrder: img.sortOrder
                         }))
                     );
                 }
             }
-
-            return product;
+            
+            return this.getById(id);
         });
     }
 
-    async delete(data: DeleteProductBody) {
-        const [product] = await db.delete(products)
-            .where(eq(products.id, data.id))
-            .returning();
+    async delete(id: string) {
+        const [product] = await db.delete(products).where(eq(products.id, id)).returning();
+        if (!product) throw new NotFoundError('Product');
         return product;
+    }
+
+    async getById(id: string) {
+        return db.query.products.findFirst({
+            where: eq(products.id, id),
+            with: {
+                category: true,
+                brand: true,
+                images: { orderBy: (i, { asc }) => [asc(i.sortOrder)] },
+            },
+        });
     }
 }
 

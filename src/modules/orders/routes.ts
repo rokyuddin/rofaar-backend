@@ -1,112 +1,75 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { orderService } from './service.js';
-import { CreateOrderSchema, UpdateOrderStatusSchema, OrderPaginationSchema } from './schema.js';
+import { CreateOrderSchema, OrderParamsSchema, UpdateOrderStatusSchema } from './schema.js';
 import { success, paginated } from '@/shared/response.js';
 import { IdParamSchema } from '@/shared/types.js';
 import { createSwaggerConfig } from '@/shared/swagger.js';
 import type { CreateOrderBody, UpdateOrderStatusBody, OrderPaginationQuery } from './schema.js';
 
 const ordersPlugin: FastifyPluginAsync = async (fastify) => {
-    // ─── User Routes ─────────────────────────────────────────────────────────
-    fastify.register(async (instance) => {
-        const app = instance.withTypeProvider<ZodTypeProvider>();
-        app.addHook('onRequest', fastify.authenticate);
+    const f = fastify.withTypeProvider<ZodTypeProvider>();
 
-        // POST /orders/create
-        app.post('/create', {
-            schema: {
-                ...createSwaggerConfig(['User | Orders'], 'Create Order', 'Place a new order from cart', true),
-                body: CreateOrderSchema,
-            },
-            handler: async (request, reply) => {
-                const order = await orderService.create(request.user.id, request.body as CreateOrderBody);
-                return reply.code(201).send(success({ orderId: order.id }, 'Order placed successfully'));
-            },
-        });
+    // ─── Protected Routes (User) ──────────────────────────────────────────────
 
-        // GET /orders/list
-        app.get('/list', {
-            schema: {
-                ...createSwaggerConfig(['User | Orders'], 'List My Orders', 'Get current user\'s orders', true),
-            },
-            handler: async (request) => {
-                const userOrders = await orderService.list(request.user.id);
-                return success(userOrders);
-            },
-        });
+    f.post('/orders', {
+        preHandler: [fastify.authenticate],
+        schema: { body: CreateOrderSchema },
+        handler: async (request, reply) => {
+            const order = await orderService.create(request.user.id, request.body);
+            return reply.code(201).send(success({ orderId: order.id }, 'Order placed successfully'));
+        },
+    });
 
-        // GET /orders/:id
-        app.get('/:id', {
-            schema: {
-                ...createSwaggerConfig(['User | Orders'], 'Get Order Details', 'Get details of a specific order', true),
-                params: IdParamSchema,
-            },
-            handler: async (request) => {
-                const order = await orderService.getById(request.user.id, request.params.id);
-                return success(order);
-            },
-        });
-    }, { prefix: '/orders' });
+    f.get('/orders', {
+        preHandler: [fastify.authenticate],
+        handler: async (request) => {
+            const userOrders = await orderService.list(request.user.id);
+            return success(userOrders);
+        },
+    });
 
-    // ─── Admin Routes ────────────────────────────────────────────────────────
-    fastify.register(async (instance) => {
-        const app = instance.withTypeProvider<ZodTypeProvider>();
-        app.addHook('onRequest', fastify.adminOnly);
+    f.get('/orders/:id', {
+        preHandler: [fastify.authenticate],
+        schema: { params: IdParamSchema },
+        handler: async (request) => {
+            const order = await orderService.getById(request.user.id, request.params.id);
+            return success(order);
+        },
+    });
 
-        // GET /admin/orders/list
-        app.get('/list', {
-            schema: {
-                ...createSwaggerConfig(['Admin | Orders'], 'List All Orders', 'Get all orders with pagination', true),
-                querystring: OrderPaginationSchema,
-            },
-            handler: async (request) => {
-                const query = request.query as OrderPaginationQuery;
-                const { rows, total } = await orderService.listAll(query);
-                return paginated(rows, {
-                    page: query.page,
-                    limit: query.limit,
-                    total,
-                });
-            },
-        });
+    // ─── Admin Routes ─────────────────────────────────────────────────────────
 
-        // GET /admin/orders/recent
-        app.get('/recent', {
-            schema: {
-                ...createSwaggerConfig(['Admin | Orders'], 'Recent Orders', 'Get recent orders for dashboard', true),
-            },
-            handler: async () => {
-                const result = await orderService.getRecentOrders();
-                return success(result);
-            },
-        });
+    f.get('/admin/orders', {
+        preHandler: [fastify.requirePermission('read', 'orders')],
+        schema: { querystring: OrderParamsSchema },
+        handler: async (request) => {
+            const { rows, total } = await orderService.adminList(request.query);
+            return paginated(rows, {
+                page: request.query.page,
+                limit: request.query.limit,
+                total
+            });
+        },
+    });
 
-        // GET /admin/orders/:id
-        app.get('/:id', {
-            schema: {
-                ...createSwaggerConfig(['Admin | Orders'], 'Get Admin Order Details', 'Get full details of any order', true),
-                params: IdParamSchema,
-            },
-            handler: async (request) => {
-                const order = await orderService.getAdminById(request.params.id);
-                return success(order);
-            },
-        });
+    f.get('/admin/orders/:id', {
+        preHandler: [fastify.requirePermission('read', 'orders')],
+        schema: { params: IdParamSchema },
+        handler: async (request) => {
+            const order = await orderService.adminGetById(request.params.id);
+            return success(order);
+        },
+    });
 
-        // PUT /admin/orders/update
-        app.put('/update', {
-            schema: {
-                ...createSwaggerConfig(['Admin | Orders'], 'Update Order Status', 'Update order or payment status', true),
-                body: UpdateOrderStatusSchema,
-            },
-            handler: async (request) => {
-                const { id, ...data } = request.body as UpdateOrderStatusBody;
-                const result = await orderService.updateStatus(id, data);
-                return success(result, 'Order status updated');
-            },
-        });
-    }, { prefix: '/admin/orders' });
+    f.patch('/admin/orders/:id/status', {
+        preHandler: [fastify.requirePermission('update', 'orders')],
+        schema: { params: IdParamSchema, body: UpdateOrderStatusSchema },
+        handler: async (request) => {
+            const result = await orderService.updateStatus(request.params.id, request.body);
+            return success(result);
+        },
+    });
 };
 
-export default ordersPlugin;
+export default fp(ordersPlugin, { name: 'order-routes' });
