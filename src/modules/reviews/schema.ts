@@ -19,3 +19,6 @@ export const UpdateReviewSchema = z.object({
     rating: z.number().int().min(1).max(5).optional(),
     comment: z.string().optional(),
 });
+
+export type CreateReview = z.infer<typeof CreateReviewSchema>;
+export type UpdateReview = z.infer<typeof UpdateReviewSchema>;

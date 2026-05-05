@@ -26,6 +26,9 @@ export const CreateCouponSchema = z.object({
 
 export const UpdateCouponSchema = CreateCouponSchema.partial();
 
+export type CreateCoupon = z.infer<typeof CreateCouponSchema>;
+export type UpdateCoupon = z.infer<typeof UpdateCouponSchema>;
+
 export const ValidateCouponSchema = z.object({
     code: z.string().min(1).toUpperCase(),
     orderAmount: z.coerce.number().positive(),

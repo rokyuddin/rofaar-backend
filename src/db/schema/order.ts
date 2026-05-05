@@ -13,6 +13,8 @@ import { addresses } from './address.js';
 import { products } from './product.js';
 import { coupons } from './coupon.js';
 import { refunds } from './refund.js';
+import { payments } from './payment.js';
+import { shippingMethods } from './shipping.js';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
@@ -36,7 +38,7 @@ export const paymentStatusEnum = pgEnum('payment_status', [
 
 export const paymentMethodEnum = pgEnum('payment_method', [
     'cod',
-    "on_air"
+    'on_air'
 ]);
 
 export const paymentTypeEnum = pgEnum('payment_type', [
@@ -63,6 +65,15 @@ export const orders = pgTable('orders', {
     discountAmount: numeric('discount_amount', { precision: 10, scale: 2 }).notNull().default('0'),
     total: numeric('total', { precision: 10, scale: 2 }).notNull(),
     paymentTransactionId: varchar('payment_transaction_id', { length: 255 }),
+    
+    // Shipping
+    shippingMethodId: uuid('shipping_method_id').references(() => shippingMethods.id),
+    shippingFee: numeric('shipping_fee', { precision: 10, scale: 2 }).notNull().default('0'),
+    trackingNumber: varchar('tracking_number', { length: 255 }),
+    trackingUrl: varchar('tracking_url', { length: 500 }),
+    shippedAt: timestamp('shipped_at', { withTimezone: true }),
+    deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -90,6 +101,8 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
     coupon: one(coupons, { fields: [orders.couponId], references: [coupons.id] }),
     items: many(orderItems),
     refund: one(refunds),
+    payments: many(payments),
+    shippingMethod: one(shippingMethods, { fields: [orders.shippingMethodId], references: [shippingMethods.id] }),
 }));
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({

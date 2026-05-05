@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import { brands } from '@/db/schema/brand.js';
 import { NotFoundError } from '@/shared/errors.js';
+import type { CreateBrand, UpdateBrand } from './schema.js';
 
 export class BrandService {
     async list() {
@@ -26,12 +27,12 @@ export class BrandService {
         return brand;
     }
 
-    async create(data: { name: string; slug: string; description?: string; logoUrl?: string }) {
+    async create(data: CreateBrand) {
         const [brand] = await db.insert(brands).values(data).returning();
         return brand!;
     }
 
-    async update(id: string, data: { name?: string | undefined; slug?: string | undefined; description?: string | undefined; logoUrl?: string | undefined }) {
+    async update(id: string, data: UpdateBrand) {
 
         const [brand] = await db
             .update(brands)

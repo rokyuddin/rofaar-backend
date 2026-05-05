@@ -1,4 +1,4 @@
-import { pgTable, uuid, integer, text, timestamp, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, integer, text, timestamp, check, boolean } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { users } from './user.js';
 import { products } from './product.js';
@@ -15,6 +15,8 @@ export const reviews = pgTable(
             .references(() => products.id, { onDelete: 'cascade' }),
         rating: integer('rating').notNull(),
         comment: text('comment'),
+        isVerifiedPurchase: boolean('is_verified_purchase').notNull().default(false),
+        helpfulVotes: integer('helpful_votes').notNull().default(0),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     },

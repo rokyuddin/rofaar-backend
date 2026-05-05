@@ -5,6 +5,7 @@ import {
     varchar,
     timestamp,
     boolean,
+    integer,
     index,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
@@ -13,13 +14,21 @@ import { relations } from 'drizzle-orm';
 
 export const users = pgTable('users', {
     id: uuid('id').primaryKey().defaultRandom(),
-    name: varchar('name', { length: 255 }).notNull(),
-    email: varchar('email', { length: 255 }).notNull().unique(),
-    passwordHash: text('password_hash').notNull(),
+    name: varchar('name', { length: 255 }), // nullable until registration complete
+    email: varchar('email', { length: 255 }).unique(), // nullable until registration complete
+    phone: varchar('phone', { length: 20 }).notNull().unique(),
+    passwordHash: text('password_hash'), // nullable until registration complete
+
     roleId: uuid('role_id').notNull(), // FK → roles.id (references added via relations)
     isVerified: boolean('is_verified').notNull().default(false),
     isActive: boolean('is_active').notNull().default(true),
+    registrationStep: varchar('registration_step', { length: 20 }).notNull().default('pending_otp'), // pending_otp, pending_profile, completed
+    loyaltyPoints: integer('loyalty_points').notNull().default(0),
+    pendingPhone: varchar('pending_phone', { length: 20 }), // Store phone before verification
+    resetToken: varchar('reset_token', { length: 255 }),
+    resetTokenExpires: timestamp('reset_token_expires', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => {
     return {

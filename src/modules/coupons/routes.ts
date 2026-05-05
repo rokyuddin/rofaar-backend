@@ -9,54 +9,57 @@ import { IdParamSchema } from '@/shared/types.js';
 const couponRoutes: FastifyPluginAsync = async (fastify) => {
     // ─── Public/User Routes ──────────────────────────────────────────────────
     fastify.register(async (instance) => {
-        const app = instance.withTypeProvider<ZodTypeProvider>();
+        const f = instance.withTypeProvider<ZodTypeProvider>();
 
-    // ─── Protected Routes (User) ──────────────────────────────────────────────
+        f.post('/coupons/validate', {
+            preHandler: [fastify.authenticate],
+            schema: { body: ValidateCouponSchema },
+            handler: async (request) => {
+                const result = await couponService.validate(request.body.code, request.body.orderAmount);
+                return success(result);
+            },
+        });
 
-    f.post('/coupons/validate', {
-        preHandler: [fastify.authenticate],
-        schema: { body: ValidateCouponSchema },
-        handler: async (request) => {
-            const result = await couponService.validate(request.body.code, request.body.orderAmount);
-            return success(result);
-        },
-    });
+        // ─── Admin Routes ─────────────────────────────────────────────────────────
+        fastify.register(async (adminInstance) => {
+            const app = adminInstance.withTypeProvider<ZodTypeProvider>();
+            app.addHook('onRequest', fastify.authenticate);
 
-    // ─── Admin Routes ─────────────────────────────────────────────────────────
+            app.get('/', {
+                preHandler: [fastify.requirePermission('read', 'coupons')],
+                handler: async () => {
+                    const result = await couponService.list();
+                    return success(result);
+                },
+            });
 
-    f.get('/admin/coupons', {
-        preHandler: [fastify.requirePermission('read', 'coupons')],
-        handler: async () => {
-            const result = await couponService.list();
-            return success(result);
-        },
-    });
+            app.post('/', {
+                preHandler: [fastify.requirePermission('create', 'coupons')],
+                schema: { body: CreateCouponSchema },
+                handler: async (request, reply) => {
+                    const result = await couponService.create(request.body);
+                    return reply.code(201).send(success(result));
+                },
+            });
 
-    f.post('/admin/coupons', {
-        preHandler: [fastify.requirePermission('create', 'coupons')],
-        schema: { body: CreateCouponSchema },
-        handler: async (request, reply) => {
-            const result = await couponService.create(request.body);
-            return reply.code(201).send(success(result));
-        },
-    });
+            app.put('/:id', {
+                preHandler: [fastify.requirePermission('update', 'coupons')],
+                schema: { params: IdParamSchema, body: UpdateCouponSchema },
+                handler: async (request) => {
+                    const result = await couponService.update(request.params.id, request.body);
+                    return success(result);
+                },
+            });
 
-    f.put('/admin/coupons/:id', {
-        preHandler: [fastify.requirePermission('update', 'coupons')],
-        schema: { params: IdParamSchema, body: UpdateCouponSchema },
-        handler: async (request) => {
-            const result = await couponService.update(request.params.id, request.body);
-            return success(result);
-        },
-    });
-
-    f.delete('/admin/coupons/:id', {
-        preHandler: [fastify.requirePermission('delete', 'coupons')],
-        schema: { params: IdParamSchema },
-        handler: async (request) => {
-            await couponService.delete(request.params.id);
-            return success(null, 'Coupon deleted successfully');
-        },
+            app.delete('/:id', {
+                preHandler: [fastify.requirePermission('delete', 'coupons')],
+                schema: { params: IdParamSchema },
+                handler: async (request) => {
+                    await couponService.delete(request.params.id);
+                    return success(null, 'Coupon deleted successfully');
+                },
+            });
+        }, { prefix: '/admin/coupons' });
     });
 };
 

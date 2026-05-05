@@ -2,7 +2,9 @@ import { eq, and, desc, count, avg } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import { reviews } from '@/db/schema/review.js';
 import { products } from '@/db/schema/product.js';
+import { orders, orderItems } from '@/db/schema/order.js';
 import { NotFoundError } from '@/shared/errors.js';
+import type { CreateReview, UpdateReview } from './schema.js';
 
 export class ReviewService {
     async listByProduct(productId: string) {
@@ -28,21 +30,45 @@ export class ReviewService {
         };
     }
 
-    async create(userId: string, data: { productId: string; rating: number; comment?: string }) {
+    async create(userId: string, data: CreateReview) {
         const product = await db.query.products.findFirst({
             where: eq(products.id, data.productId),
         });
         if (!product) throw new NotFoundError('Product');
 
+        // Check if verified purchase
+        const purchase = await db.select({ id: orders.id })
+            .from(orders)
+            .innerJoin(orderItems, eq(orders.id, orderItems.orderId))
+            .where(and(
+                eq(orders.userId, userId),
+                eq(orderItems.productId, data.productId),
+                eq(orders.status, 'delivered')
+            ))
+            .limit(1);
+
+        const isVerifiedPurchase = purchase.length > 0;
+
         const [review] = await db
             .insert(reviews)
-            .values({ ...data, userId })
+            .values({ ...data, userId, isVerifiedPurchase })
             .returning();
         
         return review!;
     }
 
-    async update(userId: string, id: string, data: any) {
+    async voteHelpful(id: string) {
+        const [review] = await db
+            .update(reviews)
+            .set({ helpfulVotes: sql`${reviews.helpfulVotes} + 1` })
+            .where(eq(reviews.id, id))
+            .returning();
+        
+        if (!review) throw new NotFoundError('Review');
+        return review;
+    }
+
+    async update(userId: string, id: string, data: UpdateReview) {
         const [review] = await db
             .update(reviews)
             .set({ ...data, updatedAt: new Date() })

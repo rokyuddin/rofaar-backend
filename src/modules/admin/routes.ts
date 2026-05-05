@@ -3,15 +3,25 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { success } from '@/shared/response.js';
 import { createSwaggerConfig } from '@/shared/swagger.js';
 
+import { adminService } from './service.js';
+
 const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const f = fastify.withTypeProvider<ZodTypeProvider>();
-    f.addHook('onRequest', fastify.adminOnly);
+    f.addHook('onRequest', fastify.authenticate);
+    f.addHook('onRequest', fastify.admin);
 
-    f.get('/admin/stats', {
-        schema: {
-            ...createSwaggerConfig(['Admin'], 'Admin Dashboard Stats', 'Get admin dashboard statistics (stub)', true),
+    f.get('/stats', {
+        handler: async () => {
+            const stats = await adminService.getStats();
+            return success(stats);
         },
-        handler: async () => success({ users: 0, orders: 0 }, 'Admin module stub'),
+    });
+
+    f.get('/recent-orders', {
+        handler: async () => {
+            const orders = await adminService.getRecentOrders();
+            return success(orders);
+        },
     });
 };
 

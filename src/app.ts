@@ -30,6 +30,12 @@ import comboRoutes from '@/modules/combos/routes.js';
 import reviewRoutes from '@/modules/reviews/routes.js';
 import adminRoutes from '@/modules/admin/routes.js';
 import paymentRoutes from '@/modules/payments/routes.js';
+import shippingRoutes from '@/modules/shipping/routes.js';
+import refundRoutes from '@/modules/refunds/routes.js';
+import inventoryRoutes from '@/modules/inventory/routes.js';
+import userRoutes from '@/modules/users/routes.js';
+import qaRoutes from '@/modules/qa/routes.js';
+import searchRoutes from '@/modules/search/routes.js';
 
 export async function buildApp() {
     const app = Fastify({
@@ -73,12 +79,18 @@ export async function buildApp() {
     await app.register(cartRoutes, { prefix: '/api/v1' });
     await app.register(orderRoutes, { prefix: '/api/v1' });
     await app.register(wishlistRoutes, { prefix: '/api/v1' });
-    await app.register(addressesRoutes, { prefix: '/api/v1' });
+    await app.register(addressRoutes, { prefix: '/api/v1' });
     await app.register(couponRoutes, { prefix: '/api/v1' });
-    await app.register(combosRoutes, { prefix: '/api/v1' });
-    await app.register(reviewsRoutes, { prefix: '/api/v1' });
-    await app.register(adminRoutes, { prefix: '/api/v1' });
-    await app.register(paymentsRoutes, { prefix: '/api/v1' });
+    await app.register(comboRoutes, { prefix: '/api/v1' });
+    await app.register(reviewRoutes, { prefix: '/api/v1' });
+    await app.register(adminRoutes, { prefix: '/api/v1/admin' });
+    await app.register(paymentRoutes, { prefix: '/api/v1' });
+    await app.register(shippingRoutes, { prefix: '/api/v1' });
+    await app.register(refundRoutes, { prefix: '/api/v1' });
+    await app.register(inventoryRoutes, { prefix: '/api/v1' });
+    await app.register(userRoutes, { prefix: '/api/v1' });
+    await app.register(qaRoutes, { prefix: '/api/v1' });
+    await app.register(searchRoutes, { prefix: '/api/v1/search' });
 
     return app;
 }

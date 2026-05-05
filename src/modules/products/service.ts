@@ -2,18 +2,10 @@ import { eq, and, gte, lte, ilike, count, sql, desc, asc } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import { products, productImages } from '@/db/schema/product.js';
 import { NotFoundError } from '@/shared/errors.js';
+import type { CreateProduct, UpdateProduct, ProductParams } from './schema.js';
 
 export class ProductService {
-    async list(filters: {
-        page: number;
-        limit: number;
-        category?: string;
-        brand?: string;
-        minPrice?: number;
-        maxPrice?: number;
-        search?: string;
-        sort?: 'newest' | 'price-low' | 'price-high' | 'popular';
-    }) {
+    async list(filters: ProductParams) {
         const { page, limit, category, brand, minPrice, maxPrice, search, sort } = filters;
         const offset = (page - 1) * limit;
 
@@ -77,11 +69,14 @@ export class ProductService {
         return product;
     }
 
-    async create(data: any) {
+    async create(data: CreateProduct) {
         const { images, ...productData } = data;
         
         return await db.transaction(async (tx) => {
-            const [product] = await tx.insert(products).values(productData).returning();
+            const [product] = await tx.insert(products).values({
+                ...productData,
+                price: productData.price.toString(),
+            }).returning();
             
             if (images && images.length > 0) {
                 await tx.insert(productImages).values(
@@ -93,17 +88,23 @@ export class ProductService {
                 );
             }
             
-            return this.getById(product!.id);
+            const result = await this.getById(product!.id);
+            if (!result) throw new Error('Product creation failed');
+            return result;
         });
     }
 
-    async update(id: string, data: any) {
+    async update(id: string, data: UpdateProduct) {
         const { images, ...productData } = data;
         
         return await db.transaction(async (tx) => {
             const [product] = await tx
                 .update(products)
-                .set({ ...productData, updatedAt: new Date() })
+                .set({ 
+                    ...productData, 
+                    price: productData.price?.toString(),
+                    updatedAt: new Date() 
+                })
                 .where(eq(products.id, id))
                 .returning();
             
@@ -123,7 +124,9 @@ export class ProductService {
                 }
             }
             
-            return this.getById(id);
+            const result = await this.getById(id);
+            if (!result) throw new Error('Product update failed');
+            return result;
         });
     }
 

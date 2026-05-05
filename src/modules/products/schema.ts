@@ -40,3 +40,7 @@ export const CreateProductSchema = z.object({
 });
 
 export const UpdateProductSchema = CreateProductSchema.partial();
+
+export type CreateProduct = z.infer<typeof CreateProductSchema>;
+export type UpdateProduct = z.infer<typeof UpdateProductSchema>;
+export type ProductParams = z.infer<typeof ProductParamsSchema>;

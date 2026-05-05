@@ -27,8 +27,10 @@ const categoryRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // ─── Admin Routes ─────────────────────────────────────────────────────────
-
-    f.post('/admin/categories', {
+    fastify.register(async (instance) => {
+        const app = instance.withTypeProvider<ZodTypeProvider>();
+        app.addHook('onRequest', fastify.authenticate);
+    app.post('/', {
         preHandler: [fastify.requirePermission('create', 'categories')],
         schema: { body: CreateCategorySchema },
         handler: async (request, reply) => {
@@ -37,7 +39,7 @@ const categoryRoutes: FastifyPluginAsync = async (fastify) => {
         },
     });
 
-    f.put('/admin/categories/:id', {
+    app.put('/:id', {
         preHandler: [fastify.requirePermission('update', 'categories')],
         schema: { params: IdParamSchema, body: UpdateCategorySchema },
         handler: async (request) => {
@@ -46,7 +48,7 @@ const categoryRoutes: FastifyPluginAsync = async (fastify) => {
         },
     });
 
-    f.delete('/admin/categories/:id', {
+    app.delete('/:id', {
         preHandler: [fastify.requirePermission('delete', 'categories')],
         schema: { params: IdParamSchema },
         handler: async (request) => {
@@ -54,6 +56,7 @@ const categoryRoutes: FastifyPluginAsync = async (fastify) => {
             return success(null, 'Category deleted successfully');
         },
     });
+    }, { prefix: '/admin/categories' });
 };
 
 export default fp(categoryRoutes, { name: 'category-routes' });

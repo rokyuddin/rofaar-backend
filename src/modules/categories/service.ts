@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm';
-import { eq } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import { categories } from '@/db/schema/category.js';
 import { NotFoundError } from '@/shared/errors.js';
+import type { CreateCategory, UpdateCategory } from './schema.js';
 
 export class CategoryService {
     async list() {
@@ -27,12 +27,12 @@ export class CategoryService {
         return category;
     }
 
-    async create(data: { name: string; slug: string; description?: string; imageUrl?: string }) {
+    async create(data: CreateCategory) {
         const [category] = await db.insert(categories).values(data).returning();
         return category!;
     }
 
-    async update(id: string, data: { name?: string | undefined; slug?: string | undefined; description?: string | undefined; imageUrl?: string | undefined }) {
+    async update(id: string, data: UpdateCategory) {
 
         const [category] = await db
             .update(categories)

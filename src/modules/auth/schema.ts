@@ -1,71 +1,82 @@
-
 import { z } from 'zod';
 
-// ─── Customer Auth Schemas ──────────────────────────────────────────────────
+// ─── Auth Schemas ────────────────────────────────────────────────────────────
 
-export const CustomerRegisterBodySchema = z.object({
-    name: z.string().min(2).max(120),
+// Step 1: Request OTP
+export const RequestOtpBodySchema = z.object({
     phone: z.string().min(10).max(20),
-    password: z.string().min(6), // using length requirements from standard practices
 });
 
-export const CustomerVerifyOtpBodySchema = z.object({
-    phone: z.string(),
-    otp: z.string().length(4),
+// Step 2: Verify OTP
+export const VerifyOtpBodySchema = z.object({
+    phone: z.string().min(10).max(20),
+    otp: z.string().length(6),
 });
 
-export const CustomerLoginBodySchema = z.object({
-    phone: z.string(),
-    password: z.string().min(6),
+// Step 3: Complete Registration (with profile info)
+export const CompleteRegistrationBodySchema = z.object({
+    token: z.string(),
+    name: z.string().min(2).max(120),
+    email: z.string().email(),
+    password: z.string().min(8),
 });
 
-export const CustomerForgotPasswordBodySchema = z.object({
-    phone: z.string(),
+// Login
+export const LoginBodySchema = z.object({
+    phone: z.string().min(10).max(20),
+    password: z.string().min(1),
 });
 
-export const CustomerResetPasswordBodySchema = z.object({
-    phone: z.string(),
-    otp: z.string().length(4),
-    newPassword: z.string().min(6),
+export const AdminLoginBodySchema = LoginBodySchema;
+
+// ─── Password Reset Flow ─────────────────────────────────────────────────────
+
+export const ForgotPasswordBodySchema = z.object({
+    phone: z.string().min(10).max(20),
 });
 
-export const CustomerChangePasswordBodySchema = z.object({
-    oldPassword: z.string(),
-    newPassword: z.string().min(6),
+export const VerifyResetOtpBodySchema = z.object({
+    phone: z.string().min(10).max(20),
+    otp: z.string().length(6),
 });
+
+export const ResetPasswordWithTokenSchema = z.object({
+    resetToken: z.string().min(1),
+    newPassword: z.string().min(8),
+});
+
+// ─── Authenticated Password Change ───────────────────────────────────────────
+
+export const ChangePasswordBodySchema = z.object({
+    oldPassword: z.string().min(1),
+    newPassword: z.string().min(8),
+});
+
+// ─── Response Schemas ────────────────────────────────────────────────────────
 
 export const AuthResponseSchema = z.object({
     success: z.literal(true),
+    message: z.string().optional(),
     data: z.object({
-        token: z.string().optional(),
-        message: z.string().optional(),
+        token: z.string(),
         user: z.object({
-            id: z.string().uuid(),
-            name: z.string(),
-            email: z.string(),
-            role: z.enum(['super_admin', 'admin', 'operator', 'customer']),
-
+            id: z.string(),
+            name: z.string().nullable(),
+            email: z.string().nullable(),
+            role: z.string(),
         }),
     }),
 });
 
-// ─── Standard Auth Me Response ──────────────────────────────────────────────
-
 export const MeResponseSchema = z.object({
     success: z.literal(true),
+    message: z.string().optional(),
     data: z.object({
-        id: z.string().uuid(),
-        name: z.string(),
-        phone: z.string().nullable(),
+        id: z.string(),
+        name: z.string().nullable(),
         email: z.string().nullable(),
         role: z.string(),
-        status: z.string(),
-    }),
-});
-
-export const GenericMessageResponseSchema = z.object({
-    success: z.literal(true),
-    data: z.object({
-        message: z.string(),
+        isVerified: z.boolean(),
+        createdAt: z.string(),
     }),
 });

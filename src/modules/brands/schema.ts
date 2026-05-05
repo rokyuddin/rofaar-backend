@@ -17,3 +17,5 @@ export const CreateBrandSchema = z.object({
 });
 
 export const UpdateBrandSchema = CreateBrandSchema.partial();
+export type CreateBrand = z.infer<typeof CreateBrandSchema>;
+export type UpdateBrand = z.infer<typeof UpdateBrandSchema>;

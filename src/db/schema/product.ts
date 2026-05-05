@@ -25,6 +25,7 @@ export const products = pgTable('products', {
     description: text('description'),
     price: numeric('price', { precision: 10, scale: 2 }).notNull(),
     stock: integer('stock').notNull().default(0),
+    lowStockThreshold: integer('low_stock_threshold').notNull().default(10),
     isActive: boolean('is_active').notNull().default(true),
     categoryId: uuid('category_id').references(() => categories.id, { onDelete: 'set null' }),
     brandId: uuid('brand_id').references(() => brands.id, { onDelete: 'set null' }),

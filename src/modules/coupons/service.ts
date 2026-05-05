@@ -2,6 +2,7 @@ import { eq, and, gte, sql } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import { coupons } from '@/db/schema/coupon.js';
 import { NotFoundError, BadRequestError } from '@/shared/errors.js';
+import type { CreateCoupon, UpdateCoupon } from './schema.js';
 
 export class CouponService {
     async list() {
@@ -10,15 +11,25 @@ export class CouponService {
         });
     }
 
-    async create(data: any) {
-        const [coupon] = await db.insert(coupons).values(data).returning();
+    async create(data: CreateCoupon) {
+        const [coupon] = await db.insert(coupons).values({
+            ...data,
+            discountValue: data.discountValue.toString(),
+            minOrderAmount: data.minOrderAmount?.toString(),
+            expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined,
+        }).returning();
         return coupon!;
     }
 
-    async update(id: string, data: any) {
+    async update(id: string, data: UpdateCoupon) {
         const [coupon] = await db
             .update(coupons)
-            .set({ ...data, updatedAt: new Date() })
+            .set({ 
+                ...data, 
+                discountValue: data.discountValue?.toString(),
+                minOrderAmount: data.minOrderAmount?.toString(),
+                expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined,
+            })
             .where(eq(coupons.id, id))
             .returning();
         

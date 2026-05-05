@@ -4,6 +4,7 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { env } from '@/config/env.js';
 import { UnauthorizedError, ForbiddenError } from '@/shared/errors.js';
 import { permissionService, type Action, type Resource, type UserPermissions } from '@/shared/permission.service.js';
+import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 
 // ─── Type augmentation ────────────────────────────────────────────────────────
 
@@ -42,6 +43,11 @@ declare module 'fastify' {
          * Only super_admin role passes by default.
          */
         superAdminOnly: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+
+        /**
+         * Convenience helper — allows super_admin and admin roles.
+         */
+        adminOnly: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     }
 }
 
@@ -90,6 +96,16 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         await fastify.authenticate(request, reply);
         if (!permissionService.can(request.userPermissions, 'manage', '*')) {
             throw new ForbiddenError('Super admin access required');
+        }
+    });
+
+    // ── adminOnly ─────────────────────────────────────────────────────────────
+    fastify.decorate('adminOnly', async (request: FastifyRequest, reply: FastifyReply) => {
+        await fastify.authenticate(request, reply);
+        const role = request.userPermissions.roleName;
+        const isAdmin = role === 'super_admin' || role === 'admin';
+        if (!isAdmin && !permissionService.can(request.userPermissions, 'manage', '*')) {
+            throw new ForbiddenError('Admin access required');
         }
     });
 };

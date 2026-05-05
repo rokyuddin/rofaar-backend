@@ -20,8 +20,10 @@ const contactRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // ─── Admin Routes ─────────────────────────────────────────────────────────
-
-    f.get('/admin/contacts', {
+    fastify.register(async (instance) => {
+        const app = instance.withTypeProvider<ZodTypeProvider>();
+        app.addHook('onRequest', fastify.authenticate);
+    app.get('/', {
         preHandler: [fastify.requirePermission('read', 'contacts')],
         handler: async () => {
             const result = await contactService.list();
@@ -29,7 +31,7 @@ const contactRoutes: FastifyPluginAsync = async (fastify) => {
         },
     });
 
-    f.patch('/admin/contacts/:id/status', {
+    app.patch('/:id/status', {
         preHandler: [fastify.requirePermission('update', 'contacts')],
         schema: { params: IdParamSchema, body: UpdateContactStatusSchema },
         handler: async (request) => {
@@ -38,7 +40,7 @@ const contactRoutes: FastifyPluginAsync = async (fastify) => {
         },
     });
 
-    f.delete('/admin/contacts/:id', {
+    app.delete('/:id', {
         preHandler: [fastify.requirePermission('delete', 'contacts')],
         schema: { params: IdParamSchema },
         handler: async (request) => {
@@ -46,6 +48,8 @@ const contactRoutes: FastifyPluginAsync = async (fastify) => {
             return success(null, 'Submission deleted successfully');
         },
     });
+    }, { prefix: '/admin/contacts' });
+
 };
 
 export default fp(contactRoutes, { name: 'contact-routes' });

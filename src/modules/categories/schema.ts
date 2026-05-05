@@ -20,3 +20,5 @@ export const CreateCategorySchema = z.object({
 });
 
 export const UpdateCategorySchema = CreateCategorySchema.partial();
+export type CreateCategory = z.infer<typeof CreateCategorySchema>;
+export type UpdateCategory = z.infer<typeof UpdateCategorySchema>;
