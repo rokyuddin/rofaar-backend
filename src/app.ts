@@ -39,9 +39,9 @@ import searchRoutes from '@/modules/search/routes.js';
 export async function buildApp() {
     const app = Fastify({
         logger:
-            process.env['NODE_ENV'] !== 'test'
+            process.env['NODE_ENV'] === 'development'
                 ? { transport: { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss Z' } } }
-                : false,
+                : process.env['NODE_ENV'] === 'production',
         trustProxy: true,
     });
 
