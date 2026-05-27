@@ -38,12 +38,22 @@ export class RefundService {
 
     async adminList() {
         return db.query.refunds.findMany({
-            with: { order: true, user: true },
+            with: { 
+                order: true, 
+                user: {
+                    columns: {
+                        id: true,
+                        name: true,
+                        phone: true,
+                        email: true,
+                    }
+                } 
+            },
             orderBy: (refunds, { desc }) => [desc(refunds.createdAt)],
         });
     }
 
-    async approveRefund(refundId: string, adminNote?: string) {
+    async approveRefund(refundId: string, adminNote?: string | undefined) {
         const [refund] = await db.update(refunds)
             .set({ status: 'approved', adminNote, updatedAt: new Date() })
             .where(eq(refunds.id, refundId))

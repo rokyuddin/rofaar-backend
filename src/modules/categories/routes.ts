@@ -1,28 +1,35 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import fp from 'fastify-plugin';
 import { categoryService } from './service.js';
 import { CreateCategorySchema, UpdateCategorySchema } from './schema.js';
-import { success } from '@/shared/response.js';
 import { IdParamSchema, SlugParamSchema } from '@/shared/types.js';
 
 const categoryRoutes: FastifyPluginAsync = async (fastify) => {
-    const f = fastify.withTypeProvider<ZodTypeProvider>();
+    const app = fastify.withTypeProvider<ZodTypeProvider>();
 
-    // ─── Public Routes ────────────────────────────────────────────────────────
-
-    f.get('/categories', {
-        handler: async () => {
-            const result = await categoryService.list();
-            return success(result);
+    // ─── Public Routes ─────────────────────────────────────────────────────────
+    app.get('/', {
+        schema: {
+            tags: ['Categories'],
+            summary: 'List categories',
+            description: 'Returns all active categories.',
+        },
+        handler: async (_request, reply) => {
+            const categories = await categoryService.list();
+            return reply.sendOk(categories);
         },
     });
 
-    f.get('/categories/:slug', {
-        schema: { params: SlugParamSchema },
-        handler: async (request) => {
-            const result = await categoryService.getBySlug(request.params.slug);
-            return success(result);
+    app.get('/:slug', {
+        schema: {
+            tags: ['Categories'],
+            summary: 'Get category by slug',
+            description: 'Returns a single category by its slug.',
+            params: SlugParamSchema
+        },
+        handler: async (request, reply) => {
+            const category = await categoryService.getBySlug(request.params.slug);
+            return reply.sendOk(category);
         },
     });
 
@@ -30,33 +37,47 @@ const categoryRoutes: FastifyPluginAsync = async (fastify) => {
     fastify.register(async (instance) => {
         const app = instance.withTypeProvider<ZodTypeProvider>();
         app.addHook('onRequest', fastify.authenticate);
-    app.post('/', {
-        preHandler: [fastify.requirePermission('create', 'categories')],
-        schema: { body: CreateCategorySchema },
-        handler: async (request, reply) => {
-            const result = await categoryService.create(request.body);
-            return reply.code(201).send(success(result));
-        },
-    });
 
-    app.put('/:id', {
-        preHandler: [fastify.requirePermission('update', 'categories')],
-        schema: { params: IdParamSchema, body: UpdateCategorySchema },
-        handler: async (request) => {
-            const result = await categoryService.update(request.params.id, request.body);
-            return success(result);
-        },
-    });
+        app.post('/', {
+            preHandler: [fastify.requirePermission('create', 'categories')],
+            schema: {
+                tags: ['Admin | Categories'],
+                summary: 'Create category',
+                body: CreateCategorySchema
+            },
+            handler: async (request, reply) => {
+                const category = await categoryService.create(request.body);
+                return reply.sendCreated(category);
+            },
+        });
 
-    app.delete('/:id', {
-        preHandler: [fastify.requirePermission('delete', 'categories')],
-        schema: { params: IdParamSchema },
-        handler: async (request) => {
-            await categoryService.delete(request.params.id);
-            return success(null, 'Category deleted successfully');
-        },
+        app.put('/:id', {
+            preHandler: [fastify.requirePermission('update', 'categories')],
+            schema: {
+                tags: ['Admin | Categories'],
+                summary: 'Update category',
+                params: IdParamSchema,
+                body: UpdateCategorySchema
+            },
+            handler: async (request, reply) => {
+                const category = await categoryService.update(request.params.id, request.body);
+                return reply.sendOk(category);
+            },
+        });
+
+        app.delete('/:id', {
+            preHandler: [fastify.requirePermission('delete', 'categories')],
+            schema: {
+                tags: ['Admin | Categories'],
+                summary: 'Delete category',
+                params: IdParamSchema
+            },
+            handler: async (request, reply) => {
+                await categoryService.delete(request.params.id);
+                return reply.sendOk(null, 'Category deleted successfully');
+            },
+        });
     });
-    }, { prefix: '/admin/categories' });
 };
 
-export default fp(categoryRoutes, { name: 'category-routes' });
+export default categoryRoutes;

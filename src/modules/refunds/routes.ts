@@ -1,83 +1,81 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { refundService } from './service.js';
-import {
-    RequestRefundSchema,
-    ApproveRefundSchema,
-    RejectRefundSchema,
-    RefundResponseSchema,
-} from './schema.js';
-import { success } from '@/shared/response.js';
-import { z } from 'zod';
+import { RequestRefundSchema, ApproveRefundSchema, RejectRefundSchema } from './schema.js';
+import { IdParamSchema } from '@/shared/types.js';
 
 const refundRoutes: FastifyPluginAsync = async (fastify) => {
-    const f = fastify.withTypeProvider<ZodTypeProvider>();
-
-    // ─── Customer Routes ─────────────────────────────────────────────────────
-    f.register(async (app) => {
+    // ─── Customer Routes ───────────────────────────────────────────────────────
+    fastify.register(async (instance) => {
+        const app = instance.withTypeProvider<ZodTypeProvider>();
         app.addHook('onRequest', fastify.authenticate);
 
-        app.post('/request', {
+        app.post('/', {
             schema: {
-                body: RequestRefundSchema,
-                response: { 201: z.object({ success: z.literal(true), data: RefundResponseSchema }) },
+                tags: ['Refunds'],
+                summary: 'Request refund',
+                body: RequestRefundSchema
             },
             handler: async (request, reply) => {
                 const refund = await refundService.requestRefund(request.user.id, request.body);
-                return reply.code(201).send(success(refund));
+                return reply.sendCreated(refund);
             },
         });
 
-        app.get('/', {
+        app.get('/my', {
             schema: {
-                response: { 200: z.object({ success: z.literal(true), data: z.array(RefundResponseSchema) }) },
+                tags: ['Refunds'],
+                summary: 'List my refunds',
             },
-            handler: async (request) => {
+            handler: async (request, reply) => {
                 const refunds = await refundService.getByUserId(request.user.id);
-                return success(refunds);
+                return reply.sendOk(refunds);
             },
         });
-    }, { prefix: '/refunds' });
+    });
 
     // ─── Admin Routes ─────────────────────────────────────────────────────────
-    f.register(async (app) => {
+    fastify.register(async (instance) => {
+        const app = instance.withTypeProvider<ZodTypeProvider>();
         app.addHook('onRequest', fastify.authenticate);
-        // Assuming there's a requirement for admin check
 
-        app.get('/', {
-            onRequest: [fastify.admin],
+        app.get('/admin', {
+            preHandler: [fastify.requirePermission('read', 'orders')],
             schema: {
-                response: { 200: z.object({ success: z.literal(true), data: z.array(z.any()) }) },
+                tags: ['Admin | Refunds'],
+                summary: 'List refund requests',
             },
-            handler: async () => {
+            handler: async (_request, reply) => {
                 const refunds = await refundService.adminList();
-                return success(refunds);
+                return reply.sendOk(refunds);
             },
         });
 
         app.patch('/:id/approve', {
-            onRequest: [fastify.admin],
+            preHandler: [fastify.requirePermission('update', 'orders')],
             schema: {
-                params: z.object({ id: z.string().uuid() }),
-                body: ApproveRefundSchema,
-                response: { 200: z.object({ success: z.literal(true), data: RefundResponseSchema }) },
+                tags: ['Admin | Refunds'],
+                summary: 'Approve refund',
+                params: IdParamSchema,
+                body: ApproveRefundSchema
             },
-            handler: async (request) => {
+            handler: async (request, reply) => {
                 const refund = await refundService.approveRefund(request.params.id, request.body.adminNote);
-                return success(refund);
+                return reply.sendOk(refund);
             },
         });
 
         app.patch('/:id/reject', {
-            onRequest: [fastify.admin],
+            preHandler: [fastify.requirePermission('update', 'orders')],
             schema: {
-                params: z.object({ id: z.string().uuid() }),
-                body: RejectRefundSchema,
-                response: { 200: z.object({ success: z.literal(true), data: RefundResponseSchema }) },
+                tags: ['Admin | Refunds'],
+                summary: 'Reject refund',
+                params: IdParamSchema,
+                body: RejectRefundSchema
             },
-            handler: async (request) => {
+            handler: async (request, reply) => {
                 const refund = await refundService.rejectRefund(request.params.id, request.body.adminNote);
-                return success(refund);
+                return reply.sendOk(refund);
             },
         });
     }, { prefix: '/admin/refunds' });

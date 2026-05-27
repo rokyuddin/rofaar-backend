@@ -46,7 +46,7 @@ export const rolePermissions = pgTable('role_permissions', {
 
 export const rolesRelations = relations(roles, ({ many }) => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { users } = require('./user.js') as typeof import('./user.js');
+    const { users } = require('./user') as typeof import('./user');
     return {
         rolePermissions: many(rolePermissions),
         users: many(users),

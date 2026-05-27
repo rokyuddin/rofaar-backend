@@ -29,6 +29,11 @@ export const LoginBodySchema = z.object({
 
 export const AdminLoginBodySchema = LoginBodySchema;
 
+// Refresh Token
+export const RefreshTokenBodySchema = z.object({
+    refreshToken: z.string().min(1),
+});
+
 // ─── Password Reset Flow ─────────────────────────────────────────────────────
 
 export const ForgotPasswordBodySchema = z.object({
@@ -45,11 +50,16 @@ export const ResetPasswordWithTokenSchema = z.object({
     newPassword: z.string().min(8),
 });
 
-// ─── Authenticated Password Change ───────────────────────────────────────────
+// ─── Authenticated Profile Updates ───────────────────────────────────────────
 
 export const ChangePasswordBodySchema = z.object({
     oldPassword: z.string().min(1),
     newPassword: z.string().min(8),
+});
+
+export const UpdateProfileBodySchema = z.object({
+    name: z.string().min(2).max(120).optional(),
+    email: z.string().email().optional(),
 });
 
 // ─── Response Schemas ────────────────────────────────────────────────────────
@@ -59,6 +69,7 @@ export const AuthResponseSchema = z.object({
     message: z.string().optional(),
     data: z.object({
         token: z.string(),
+        refreshToken: z.string(),
         user: z.object({
             id: z.string(),
             name: z.string().nullable(),

@@ -1,56 +1,61 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { qaService } from './service.js';
-import { CreateQuestionSchema, CreateAnswerSchema, QAResponseSchema } from './schema.js';
-import { success } from '@/shared/response.js';
-import { z } from 'zod';
+import { CreateQuestionSchema, CreateAnswerSchema } from './schema.js';
+import { IdParamSchema } from '@/shared/types.js';
 
 const qaRoutes: FastifyPluginAsync = async (fastify) => {
-    const f = fastify.withTypeProvider<ZodTypeProvider>();
+    const app = fastify.withTypeProvider<ZodTypeProvider>();
 
-    // ─── Public Routes ────────────────────────────────────────────────────────
-    f.get('/products/:id/questions', {
+    // ─── Public Routes ─────────────────────────────────────────────────────────
+    app.get('/products/:id/questions', {
         schema: {
-            params: z.object({ id: z.string().uuid() }),
-            response: { 200: z.object({ success: z.literal(true), data: z.array(QAResponseSchema) }) },
+            tags: ['Q&A'],
+            summary: 'List product questions',
+            params: IdParamSchema
         },
-        handler: async (request) => {
+        handler: async (request, reply) => {
             const questions = await qaService.listByProduct(request.params.id);
-            return success(questions);
+            return reply.sendOk(questions);
         },
     });
 
-    // ─── Protected Routes ─────────────────────────────────────────────────────
-    f.register(async (app) => {
+    // ─── Protected Routes ───────────────────────────────────────────────────────
+    fastify.register(async (instance) => {
+        const app = instance.withTypeProvider<ZodTypeProvider>();
         app.addHook('onRequest', fastify.authenticate);
 
         app.post('/questions', {
             schema: {
-                body: CreateQuestionSchema,
-                response: { 201: z.object({ success: z.literal(true), data: z.any() }) },
+                tags: ['Q&A'],
+                summary: 'Ask a question',
+                body: CreateQuestionSchema
             },
             handler: async (request, reply) => {
                 const question = await qaService.askQuestion(request.user.id, request.body);
-                return reply.code(201).send(success(question));
-            },
-        });
-
-        app.post('/answers', {
-            schema: {
-                body: CreateAnswerSchema,
-                response: { 201: z.object({ success: z.literal(true), data: z.any() }) },
-            },
-            handler: async (request, reply) => {
-                // Check if user is admin for official status
-                const isOfficial = request.user.role === 'admin';
-                const answer = await qaService.answerQuestion(request.user.id, {
-                    ...request.body,
-                    isOfficial,
-                });
-                return reply.code(201).send(success(answer));
+                return reply.sendCreated(question);
             },
         });
     }, { prefix: '/qa' });
+
+    // ─── Admin Routes ─────────────────────────────────────────────────────────
+    fastify.register(async (instance) => {
+        const app = instance.withTypeProvider<ZodTypeProvider>();
+        app.addHook('onRequest', fastify.authenticate);
+
+        app.post('/answers', {
+            preHandler: [fastify.requirePermission('update', 'products')],
+            schema: {
+                tags: ['Admin | Q&A'],
+                summary: 'Answer a question',
+                body: CreateAnswerSchema
+            },
+            handler: async (request, reply) => {
+                const answer = await qaService.answerQuestion(request.user.id, request.body);
+                return reply.sendCreated(answer);
+            },
+        });
+    }, { prefix: '/admin/qa' });
 };
 
 export default qaRoutes;

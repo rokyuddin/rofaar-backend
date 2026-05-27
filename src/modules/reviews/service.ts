@@ -1,9 +1,9 @@
-import { eq, and, desc, count, avg } from 'drizzle-orm';
+import { eq, and, desc, count, avg, sql } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import { reviews } from '@/db/schema/review.js';
 import { products } from '@/db/schema/product.js';
 import { orders, orderItems } from '@/db/schema/order.js';
-import { NotFoundError } from '@/shared/errors.js';
+import { NotFoundError, BadRequestError } from '@/shared/errors.js';
 import type { CreateReview, UpdateReview } from './schema.js';
 
 export class ReviewService {
@@ -23,11 +23,21 @@ export class ReviewService {
             })
             .from(reviews)
             .where(eq(reviews.productId, productId));
-        
+
         return {
             averageRating: Number(stats[0]?.averageRating ?? 0).toFixed(1),
             totalReviews: Number(stats[0]?.totalReviews ?? 0),
         };
+    }
+
+    async adminList() {
+        return db.query.reviews.findMany({
+            with: {
+                user: { columns: { id: true, name: true } },
+                product: { columns: { id: true, name: true, slug: true } },
+            },
+            orderBy: [desc(reviews.createdAt)],
+        });
     }
 
     async create(userId: string, data: CreateReview) {
@@ -36,15 +46,22 @@ export class ReviewService {
         });
         if (!product) throw new NotFoundError('Product');
 
-        // Check if verified purchase
-        const purchase = await db.select({ id: orders.id })
+        const existing = await db.query.reviews.findFirst({
+            where: and(eq(reviews.userId, userId), eq(reviews.productId, data.productId)),
+        });
+        if (existing) throw new BadRequestError('You have already reviewed this product');
+
+        const purchase = await db
+            .select({ id: orders.id })
             .from(orders)
             .innerJoin(orderItems, eq(orders.id, orderItems.orderId))
-            .where(and(
-                eq(orders.userId, userId),
-                eq(orderItems.productId, data.productId),
-                eq(orders.status, 'delivered')
-            ))
+            .where(
+                and(
+                    eq(orders.userId, userId),
+                    eq(orderItems.productId, data.productId),
+                    eq(orders.status, 'delivered'),
+                ),
+            )
             .limit(1);
 
         const isVerifiedPurchase = purchase.length > 0;
@@ -53,7 +70,7 @@ export class ReviewService {
             .insert(reviews)
             .values({ ...data, userId, isVerifiedPurchase })
             .returning();
-        
+
         return review!;
     }
 
@@ -63,7 +80,7 @@ export class ReviewService {
             .set({ helpfulVotes: sql`${reviews.helpfulVotes} + 1` })
             .where(eq(reviews.id, id))
             .returning();
-        
+
         if (!review) throw new NotFoundError('Review');
         return review;
     }
@@ -74,7 +91,7 @@ export class ReviewService {
             .set({ ...data, updatedAt: new Date() })
             .where(and(eq(reviews.id, id), eq(reviews.userId, userId)))
             .returning();
-        
+
         if (!review) throw new NotFoundError('Review');
         return review;
     }
@@ -87,7 +104,7 @@ export class ReviewService {
             .delete(reviews)
             .where(and(...conditions))
             .returning();
-        
+
         if (!review) throw new NotFoundError('Review');
         return review;
     }

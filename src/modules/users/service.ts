@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { NotFoundError } from '@/shared/errors.js';
 
 export class UserService {
-    async updateProfile(userId: string, data: { name?: string; email?: string; avatar?: string }) {
+    async updateProfile(userId: string, data: { name?: string | undefined; email?: string | undefined; avatar?: string | undefined }) {
         const [user] = await db.update(users)
             .set({ ...data, updatedAt: new Date() })
             .where(eq(users.id, userId))
@@ -22,6 +22,18 @@ export class UserService {
 
     async adminList() {
         return db.query.users.findMany({
+            columns: {
+                passwordHash: false,
+                resetToken: false,
+                resetTokenExpires: false,
+            },
+            with: {
+                role: {
+                    columns: {
+                        name: true,
+                    },
+                },
+            },
             orderBy: (u, { desc }) => [desc(u.createdAt)],
         });
     }

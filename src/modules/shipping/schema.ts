@@ -14,7 +14,9 @@ export const CreateShippingMethodSchema = z.object({
     estimatedDays: z.string().optional(),
 });
 
-export const UpdateShippingMethodSchema = CreateShippingMethodSchema.partial();
+export const UpdateShippingMethodSchema = CreateShippingMethodSchema.partial().extend({
+    isActive: z.boolean().optional(),
+});
 
 export const ShippingZoneResponseSchema = z.object({
     id: z.string().uuid(),
@@ -29,3 +31,9 @@ export const ShippingZoneResponseSchema = z.object({
         isActive: z.boolean(),
     })).optional(),
 });
+
+export type CreateShippingZone = z.infer<typeof CreateShippingZoneSchema>;
+export type UpdateShippingZone = z.infer<typeof UpdateShippingZoneSchema>;
+export type CreateShippingMethod = z.infer<typeof CreateShippingMethodSchema>;
+export type UpdateShippingMethod = z.infer<typeof UpdateShippingMethodSchema>;
+export type ShippingZoneResponse = z.infer<typeof ShippingZoneResponseSchema>;

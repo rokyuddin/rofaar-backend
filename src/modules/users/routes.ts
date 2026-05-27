@@ -1,49 +1,52 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { userService } from './service.js';
-import { UpdateProfileSchema, UserResponseSchema } from './schema.js';
-import { success } from '@/shared/response.js';
-import { z } from 'zod';
+import { UpdateProfileSchema } from './schema.js';
 
 const userRoutes: FastifyPluginAsync = async (fastify) => {
-    const f = fastify.withTypeProvider<ZodTypeProvider>();
-
-    f.register(async (app) => {
+    // ─── Protected Routes ───────────────────────────────────────────────────────
+    fastify.register(async (instance) => {
+        const app = instance.withTypeProvider<ZodTypeProvider>();
         app.addHook('onRequest', fastify.authenticate);
 
         app.patch('/profile', {
             schema: {
-                body: UpdateProfileSchema,
-                response: { 200: z.object({ success: z.literal(true), data: UserResponseSchema }) },
+                tags: ['Profile'],
+                summary: 'Update user profile',
+                body: UpdateProfileSchema
             },
-            handler: async (request) => {
+            handler: async (request, reply) => {
                 const user = await userService.updateProfile(request.user.id, request.body);
-                return success(user);
+                return reply.sendOk(user);
             },
         });
 
         app.delete('/account', {
             schema: {
-                response: { 200: z.object({ success: z.literal(true), message: z.string() }) },
+                tags: ['Profile'],
+                summary: 'Delete account',
             },
-            handler: async (request) => {
+            handler: async (request, reply) => {
                 await userService.deleteAccount(request.user.id);
-                return success(null, 'Account deleted successfully');
+                return reply.sendOk(null, 'Account deleted successfully');
             },
         });
-    }, { prefix: '/users' });
+    });
 
-    f.register(async (app) => {
+    // ─── Admin Routes ─────────────────────────────────────────────────────────
+    fastify.register(async (instance) => {
+        const app = instance.withTypeProvider<ZodTypeProvider>();
         app.addHook('onRequest', fastify.authenticate);
-        app.addHook('onRequest', fastify.admin);
 
-        app.get('/', {
+        app.get('/admin', {
+            preHandler: [fastify.requirePermission('read', 'users')],
             schema: {
-                response: { 200: z.object({ success: z.literal(true), data: z.array(z.any()) }) },
+                tags: ['Admin | Users'],
+                summary: 'List users',
             },
-            handler: async () => {
+            handler: async (_request, reply) => {
                 const users = await userService.adminList();
-                return success(users);
+                return reply.sendOk(users);
             },
         });
     }, { prefix: '/admin/users' });

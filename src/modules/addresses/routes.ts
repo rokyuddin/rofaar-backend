@@ -1,46 +1,60 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import fp from 'fastify-plugin';
 import { addressService } from './service.js';
 import { CreateAddressSchema, UpdateAddressSchema } from './schema.js';
-import { success } from '@/shared/response.js';
 import { IdParamSchema } from '@/shared/types.js';
 
-const addressesPlugin: FastifyPluginAsync = async (fastify) => {
-    const f = fastify.withTypeProvider<ZodTypeProvider>();
+const addressRoutes: FastifyPluginAsync = async (fastify) => {
+    const app = fastify.withTypeProvider<ZodTypeProvider>();
+    app.addHook('onRequest', fastify.authenticate);
 
-    f.addHook('onRequest', fastify.authenticate);
-
-    f.get('/addresses', {
-        handler: async (request) => {
-            const result = await addressService.list(request.user.id);
-            return success(result);
+    app.get('/', {
+        schema: {
+            tags: ['Addresses'],
+            summary: 'List addresses',
         },
-    });
-
-    f.post('/addresses', {
-        schema: { body: CreateAddressSchema },
         handler: async (request, reply) => {
-            const result = await addressService.create(request.user.id, request.body);
-            return reply.code(201).send(success(result));
+            const addresses = await addressService.list(request.user.id);
+            return reply.sendOk(addresses);
         },
     });
 
-    f.put('/addresses/:id', {
-        schema: { params: IdParamSchema, body: UpdateAddressSchema },
-        handler: async (request) => {
-            const result = await addressService.update(request.user.id, request.params.id, request.body);
-            return success(result);
+    app.post('/', {
+        schema: {
+            tags: ['Addresses'],
+            summary: 'Create address',
+            body: CreateAddressSchema
+        },
+        handler: async (request, reply) => {
+            const address = await addressService.create(request.user.id, request.body);
+            return reply.sendCreated(address);
         },
     });
 
-    f.delete('/addresses/:id', {
-        schema: { params: IdParamSchema },
-        handler: async (request) => {
+    app.put('/:id', {
+        schema: {
+            tags: ['Addresses'],
+            summary: 'Update address',
+            params: IdParamSchema,
+            body: UpdateAddressSchema
+        },
+        handler: async (request, reply) => {
+            const address = await addressService.update(request.user.id, request.params.id, request.body);
+            return reply.sendOk(address);
+        },
+    });
+
+    app.delete('/:id', {
+        schema: {
+            tags: ['Addresses'],
+            summary: 'Delete address',
+            params: IdParamSchema
+        },
+        handler: async (request, reply) => {
             await addressService.delete(request.user.id, request.params.id);
-            return success(null, 'Address deleted successfully');
+            return reply.sendOk(null, 'Address deleted successfully');
         },
     });
 };
 
-export default fp(addressesPlugin, { name: 'addresses-routes' });
+export default addressRoutes;

@@ -2,119 +2,129 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { cartService } from './service.js';
 import { AddCartItemSchema, UpdateCartItemSchema } from './schema.js';
-import { success } from '@/shared/response.js';
 import { IdParamSchema, UuidSchema } from '@/shared/types.js';
-import { createSwaggerConfig } from '@/shared/swagger.js';
 import { z } from 'zod';
 
 const cartRoutes: FastifyPluginAsync = async (fastify) => {
-    // ─── Authenticated Cart Routes ───────────────────────────────────────────
+    // ─── Customer Routes ───────────────────────────────────────────────────────
     fastify.register(async (instance) => {
         const app = instance.withTypeProvider<ZodTypeProvider>();
         app.addHook('onRequest', fastify.authenticate);
 
-        // GET /cart/list
         app.get('/list', {
             schema: {
-                ...createSwaggerConfig(['User | Cart'], 'Get Cart', 'Get current user\'s shopping cart', true),
+                tags: ['Cart'],
+                summary: 'Get cart items',
+                description: 'Returns all items currently in the authenticated user\'s shopping cart.',
             },
-            handler: async (request) => {
+            handler: async (request, reply) => {
                 const items = await cartService.get(request.user.id);
-                return success(items);
+                return reply.sendOk(items);
             },
         });
 
-        // POST /cart/add
         app.post('/add', {
             schema: {
-                ...createSwaggerConfig(['User | Cart'], 'Add to Cart', 'Add item to shopping cart', true),
-                body: AddCartItemSchema,
+                tags: ['Cart'],
+                summary: 'Add item to cart',
+                description: 'Adds a product to the authenticated user\'s shopping cart.',
+                body: AddCartItemSchema
             },
             handler: async (request, reply) => {
                 const item = await cartService.addItem(request.user.id, request.body);
-                return reply.code(201).send(success(item));
+                return reply.sendCreated(item);
             },
         });
 
-        // PUT /cart/update/:id
         app.put('/update/:id', {
             schema: {
-                ...createSwaggerConfig(['User | Cart'], 'Update Cart Item', 'Update quantity of an item in cart', true),
+                tags: ['Cart'],
+                summary: 'Update cart item',
+                description: 'Updates the quantity of an item in the shopping cart.',
                 params: IdParamSchema,
-                body: UpdateCartItemSchema,
+                body: UpdateCartItemSchema
             },
-            handler: async (request) => {
+            handler: async (request, reply) => {
                 const item = await cartService.updateItem(request.user.id, request.params.id, request.body.quantity);
-                return success(item);
+                return reply.sendOk(item);
             },
         });
 
-        // DELETE /cart/remove/:id
         app.delete('/remove/:id', {
             schema: {
-                ...createSwaggerConfig(['User | Cart'], 'Remove from Cart', 'Remove item from shopping cart', true),
-                params: IdParamSchema,
+                tags: ['Cart'],
+                summary: 'Remove cart item',
+                description: 'Removes an item from the shopping cart.',
+                params: IdParamSchema
             },
             handler: async (request, reply) => {
                 await cartService.removeItem(request.user.id, request.params.id);
-                return reply.code(204).send();
+                return reply.sendOk(null, 'Item removed from cart');
             },
         });
 
-        // DELETE /cart/clear
         app.delete('/clear', {
             schema: {
-                ...createSwaggerConfig(['User | Cart'], 'Clear Cart', 'Clear all items from shopping cart', true),
+                tags: ['Cart'],
+                summary: 'Clear cart',
+                description: 'Removes all items from the shopping cart.',
             },
             handler: async (request, reply) => {
                 await cartService.clear(request.user.id);
-                return reply.code(204).send();
+                return reply.sendOk(null, 'Cart cleared');
             },
         });
     }, { prefix: '/cart' });
 
-    // ─── Admin Cart Routes ───────────────────────────────────────────────────
+    // ─── Admin Routes ─────────────────────────────────────────────────────────
     fastify.register(async (instance) => {
         const app = instance.withTypeProvider<ZodTypeProvider>();
-        app.addHook('onRequest', fastify.adminOnly);
+        app.addHook('onRequest', fastify.authenticate);
 
-        // GET /admin/cart/user/:id
         app.get('/user/:id', {
+            preHandler: [fastify.requirePermission('read', 'orders')],
             schema: {
-                ...createSwaggerConfig(['Admin | Cart'], 'Get User Cart', 'Get a specific user\'s shopping cart', true),
-                params: IdParamSchema,
+                tags: ['Admin | Cart'],
+                summary: 'Get user cart (Admin)',
+                description: 'Returns the cart items for a specific user.',
+                params: IdParamSchema
             },
-            handler: async (request) => {
+            handler: async (request, reply) => {
                 const items = await cartService.get(request.params.id);
-                return success(items);
+                return reply.sendOk(items);
             },
         });
 
-        // DELETE /admin/cart/user/:id
         app.delete('/user/:id', {
+            preHandler: [fastify.requirePermission('update', 'orders')],
             schema: {
-                ...createSwaggerConfig(['Admin | Cart'], 'Clear User Cart', 'Clear a specific user\'s shopping cart', true),
-                params: IdParamSchema,
+                tags: ['Admin | Cart'],
+                summary: 'Clear user cart (Admin)',
+                description: 'Removes all items from a specific user\'s cart.',
+                params: IdParamSchema
             },
             handler: async (request, reply) => {
                 await cartService.clear(request.params.id);
-                return reply.code(204).send();
+                return reply.sendOk(null, 'User cart cleared');
             },
         });
 
-        // PUT /admin/cart/user/:userId/update/:id
         app.put('/user/:userId/update/:id', {
+            preHandler: [fastify.requirePermission('update', 'orders')],
             schema: {
-                ...createSwaggerConfig(['Admin | Cart'], 'Update User Cart Item', 'Update quantity of an item in a specific user\'s cart', true),
-                params: z.object({
-                    userId: UuidSchema,
-                    id: UuidSchema, // productId
-                }),
+                tags: ['Admin | Cart'],
+                summary: 'Update user cart item (Admin)',
+                description: 'Updates the quantity of an item in a specific user\'s cart.',
+                params: z.object({ userId: UuidSchema, id: UuidSchema }),
                 body: UpdateCartItemSchema,
             },
-            handler: async (request) => {
-                const item = await cartService.updateItem(request.params.userId, request.params.id, request.body.quantity);
-                return success(item);
+            handler: async (request, reply) => {
+                const item = await cartService.updateItem(
+                    request.params.userId,
+                    request.params.id,
+                    request.body.quantity,
+                );
+                return reply.sendOk(item);
             },
         });
     }, { prefix: '/admin/cart' });

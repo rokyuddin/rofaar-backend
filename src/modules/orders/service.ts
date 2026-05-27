@@ -8,7 +8,6 @@ import { coupons } from '@/db/schema/coupon.js';
 import { refunds } from '@/db/schema/refund.js';
 import { shippingMethods } from '@/db/schema/shipping.js';
 import { inventoryService } from '@/modules/inventory/service.js';
-import { marketingService } from '@/modules/marketing/service.js';
 import { NotFoundError, BadRequestError } from '@/shared/errors.js';
 import type { CreateOrder, OrderParams, UpdateStatus, UpdatePaymentStatus, CancelOrder } from './schema.js';
 
@@ -292,7 +291,7 @@ export class OrderService {
         return updated;
     }
 
-    async ship(id: string, data: { trackingNumber?: string; trackingUrl?: string }, performedBy?: string | null) {
+    async ship(id: string, data: { trackingNumber?: string | undefined; trackingUrl?: string | undefined }, performedBy?: string | null) {
         const order = await this.requireOrder(id);
         if (order.status !== 'processing') {
             throw new BadRequestError(`Cannot ship order with status '${order.status}'`);
@@ -334,9 +333,6 @@ export class OrderService {
             .returning();
 
         if (!updated) throw new NotFoundError('Order');
-
-        // Grant loyalty points
-        await marketingService.grantLoyaltyPoints(updated.userId, Number(updated.total));
 
         await this.logHistory(id, 'delivered', previousStatus, 'delivered', performedBy ?? null);
         return updated;

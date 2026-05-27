@@ -1,7 +1,7 @@
 import { pgTable, uuid, text, timestamp, pgEnum } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { users } from './user.js';
-import { orders } from './order.js';
+import { users } from './user';
+import { orders } from './order';
 
 export const refundStatusEnum = pgEnum('refund_status', [
     'requested',

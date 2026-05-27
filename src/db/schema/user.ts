@@ -42,19 +42,19 @@ export const users = pgTable('users', {
 
 export const usersRelations = relations(users, ({ one, many }) => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { roles } = require('./rbac.js') as typeof import('./rbac.js');
+    const { roles } = require('./rbac') as typeof import('./rbac');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { addresses } = require('./address.js') as typeof import('./address.js');
+    const { addresses } = require('./address') as typeof import('./address');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { orders } = require('./order.js') as typeof import('./order.js');
+    const { orders } = require('./order') as typeof import('./order');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { cartItems } = require('./cart.js') as typeof import('./cart.js');
+    const { cartItems } = require('./cart') as typeof import('./cart');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { wishlistItems } = require('./wishlist.js') as typeof import('./wishlist.js');
+    const { wishlistItems } = require('./wishlist') as typeof import('./wishlist');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { reviews } = require('./review.js') as typeof import('./review.js');
+    const { reviews } = require('./review') as typeof import('./review');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { refunds } = require('./refund.js') as typeof import('./refund.js');
+    const { refunds } = require('./refund') as typeof import('./refund');
 
     return {
         role: one(roles, {

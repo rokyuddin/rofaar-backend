@@ -2,7 +2,7 @@ import { eq, and, gte, lte, ilike, count, sql, desc, asc } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import { products, productImages } from '@/db/schema/product.js';
 import { NotFoundError } from '@/shared/errors.js';
-import type { CreateProduct, UpdateProduct, ProductParams } from './schema.js';
+import type { CreateProduct, UpdateProduct, ProductParams, AdminProductParams } from './schema.js';
 
 export class ProductService {
     async list(filters: ProductParams) {
@@ -47,6 +47,56 @@ export class ProductService {
                 orderBy,
             }),
             db.select({ value: count() }).from(products).where(and(...conditions)),
+        ]);
+
+        return {
+            rows,
+            total: Number(totalResult[0]?.value ?? 0),
+        };
+    }
+
+    async adminList(filters: AdminProductParams) {
+        const { page, limit, category, brand, minPrice, maxPrice, search, sort, isActive } = filters;
+        const offset = (page - 1) * limit;
+
+        const conditions = [];
+        if (isActive !== undefined) conditions.push(eq(products.isActive, isActive));
+        if (category) conditions.push(eq(products.categoryId, category));
+        if (brand) conditions.push(eq(products.brandId, brand));
+        if (minPrice !== undefined) conditions.push(gte(sql`CAST(${products.price} AS NUMERIC)`, minPrice));
+        if (maxPrice !== undefined) conditions.push(lte(sql`CAST(${products.price} AS NUMERIC)`, maxPrice));
+        if (search) conditions.push(ilike(products.name, `%${search}%`));
+
+        let orderBy;
+        switch (sort) {
+            case 'price-low':
+                orderBy = [asc(products.price)];
+                break;
+            case 'price-high':
+                orderBy = [desc(products.price)];
+                break;
+            case 'popular':
+                orderBy = [desc(products.stock)];
+                break;
+            case 'newest':
+            default:
+                orderBy = [desc(products.createdAt)];
+                break;
+        }
+
+        const [rows, totalResult] = await Promise.all([
+            db.query.products.findMany({
+                where: conditions.length > 0 ? and(...conditions) : undefined,
+                with: { 
+                    category: true, 
+                    brand: true,
+                    images: { orderBy: (i, { asc }) => [asc(i.sortOrder)] } 
+                },
+                limit,
+                offset,
+                orderBy,
+            }),
+            db.select({ value: count() }).from(products).where(conditions.length > 0 ? and(...conditions) : undefined),
         ]);
 
         return {

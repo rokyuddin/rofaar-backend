@@ -1,75 +1,110 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import fp from 'fastify-plugin';
 import { reviewService } from './service.js';
 import { CreateReviewSchema, UpdateReviewSchema } from './schema.js';
-import { success } from '@/shared/response.js';
 import { IdParamSchema } from '@/shared/types.js';
 
-const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
+const reviewRoutes: FastifyPluginAsync = async (fastify) => {
+    const app = fastify.withTypeProvider<ZodTypeProvider>();
+
+    // ─── Public Routes ─────────────────────────────────────────────────────────
+    app.get('/products/:id/reviews', {
+        schema: {
+            tags: ['Reviews'],
+            summary: 'List product reviews',
+            params: IdParamSchema
+        },
+        handler: async (request, reply) => {
+            const reviews = await reviewService.listByProduct(request.params.id);
+            return reply.sendOk(reviews);
+        },
+    });
+
+    app.post('/reviews/:id/helpful', {
+        schema: {
+            tags: ['Reviews'],
+            summary: 'Mark review as helpful',
+            params: IdParamSchema
+        },
+        handler: async (request, reply) => {
+            await reviewService.markHelpful(request.params.id);
+            return reply.sendOk(null, 'Marked as helpful');
+        },
+    });
+
+    // ─── Protected Routes ───────────────────────────────────────────────────────
     fastify.register(async (instance) => {
         const app = instance.withTypeProvider<ZodTypeProvider>();
-
-        // ─── Public Routes ────────────────────────────────────────────────────────
-
-        app.get('/products/:id/reviews', {
-            schema: { params: IdParamSchema },
-            handler: async (request) => {
-                const [reviews, stats] = await Promise.all([
-                    reviewService.listByProduct(request.params.id),
-                    reviewService.getStats(request.params.id),
-                ]);
-                return success({ reviews, stats });
-            },
-        });
-        app.post('/reviews/:id/helpful', {
-            schema: { params: IdParamSchema },
-            handler: async (request) => {
-                const result = await reviewService.voteHelpful(request.params.id);
-                return success(result);
-            },
-        });
-
-        // ─── Protected Routes (User) ──────────────────────────────────────────────
+        app.addHook('onRequest', fastify.authenticate);
 
         app.post('/reviews', {
-            preHandler: [fastify.authenticate],
-            schema: { body: CreateReviewSchema },
+            schema: {
+                tags: ['Reviews'],
+                summary: 'Write a review',
+                body: CreateReviewSchema
+            },
             handler: async (request, reply) => {
-                const result = await reviewService.create(request.user.id, request.body);
-                return reply.code(201).send(success(result));
+                const review = await reviewService.create(request.user.id, request.body);
+                return reply.sendCreated(review);
             },
         });
 
         app.put('/reviews/:id', {
-            preHandler: [fastify.authenticate],
-            schema: { params: IdParamSchema, body: UpdateReviewSchema },
-            handler: async (request) => {
-                const result = await reviewService.update(request.user.id, request.params.id, request.body);
-                return success(result);
+            schema: {
+                tags: ['Reviews'],
+                summary: 'Update own review',
+                params: IdParamSchema,
+                body: UpdateReviewSchema
+            },
+            handler: async (request, reply) => {
+                const review = await reviewService.update(request.user.id, request.params.id, request.body);
+                return reply.sendOk(review);
             },
         });
 
         app.delete('/reviews/:id', {
-            preHandler: [fastify.authenticate],
-            schema: { params: IdParamSchema },
-            handler: async (request) => {
-                await reviewService.delete(request.params.id, request.user.id);
-                return success(null, 'Review deleted successfully');
+            schema: {
+                tags: ['Reviews'],
+                summary: 'Delete own review',
+                params: IdParamSchema
             },
-        });
-
-        // ─── Admin Routes ─────────────────────────────────────────────────────────
-
-        app.delete('/admin/reviews/:id', {
-            preHandler: [fastify.requirePermission('delete', 'reviews')],
-            schema: { params: IdParamSchema },
-            handler: async (request) => {
-                await reviewService.delete(request.params.id);
-                return success(null, 'Review deleted by admin');
+            handler: async (request, reply) => {
+                await reviewService.delete(request.user.id, request.params.id);
+                return reply.sendOk(null, 'Review deleted successfully');
             },
         });
     });
+
+    // ─── Admin Routes ─────────────────────────────────────────────────────────
+    fastify.register(async (instance) => {
+        const app = instance.withTypeProvider<ZodTypeProvider>();
+        app.addHook('onRequest', fastify.authenticate);
+
+        app.get('/', {
+            preHandler: [fastify.requirePermission('read', 'reviews')],
+            schema: {
+                tags: ['Admin | Reviews'],
+                summary: 'List all reviews (Admin)',
+            },
+            handler: async (_request, reply) => {
+                const reviews = await reviewService.adminList();
+                return reply.sendOk(reviews);
+            },
+        });
+
+        app.delete('/:id', {
+            preHandler: [fastify.requirePermission('delete', 'reviews')],
+            schema: {
+                tags: ['Admin | Reviews'],
+                summary: 'Delete review (Admin)',
+                params: IdParamSchema
+            },
+            handler: async (request, reply) => {
+                await reviewService.adminDelete(request.params.id);
+                return reply.sendOk(null, 'Review deleted by admin');
+            },
+        });
+    }, { prefix: '/admin/reviews' });
 };
 
-export default fp(reviewsRoutes, { name: 'reviews-routes' });
+export default reviewRoutes;

@@ -1,7 +1,7 @@
 import { pgTable, uuid, integer, text, timestamp, check, boolean } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
-import { users } from './user.js';
-import { products } from './product.js';
+import { users } from './user';
+import { products } from './product';
 
 export const reviews = pgTable(
     'reviews',

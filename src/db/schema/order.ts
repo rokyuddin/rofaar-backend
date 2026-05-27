@@ -8,13 +8,13 @@ import {
     pgEnum,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { users } from './user.js';
-import { addresses } from './address.js';
-import { products } from './product.js';
-import { coupons } from './coupon.js';
-import { refunds } from './refund.js';
-import { payments } from './payment.js';
-import { shippingMethods } from './shipping.js';
+import { users } from './user';
+import { addresses } from './address';
+import { products } from './product';
+import { coupons } from './coupon';
+import { refunds } from './refund';
+import { payments } from './payment';
+import { shippingMethods } from './shipping';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 

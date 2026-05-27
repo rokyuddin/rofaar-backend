@@ -1,6 +1,6 @@
 import { pgTable, uuid, varchar, primaryKey, timestamp } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { products } from './product.js';
+import { products } from './product';
 
 // ─── Table ───────────────────────────────────────────────────────────────────
 

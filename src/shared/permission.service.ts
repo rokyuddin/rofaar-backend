@@ -50,8 +50,8 @@ export class PermissionService {
 
         return {
             id: user.id,
-            name: user.name,
-            email: user.email,
+            name: user.name ?? '',
+            email: user.email ?? '',
             roleId: role.id,
             roleName: role.name,
             permissions: role.rolePermissions.map((rp) => ({

@@ -9,11 +9,11 @@ import {
     boolean,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { categories } from './category.js';
-import { productTags } from './tag.js';
-import { reviews } from './review.js';
-import { inventoryLogs } from './inventory.js';
-import { brands } from './brand.js';
+import { categories } from './category';
+import { productTags } from './tag';
+import { reviews } from './review';
+import { inventoryLogs } from './inventory';
+import { brands } from './brand';
 
 
 // ─── Table ───────────────────────────────────────────────────────────────────

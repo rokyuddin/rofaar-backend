@@ -97,4 +97,13 @@ Base URL: `https://api.rofaar.com/api/v1`
 
 Auth: `Authorization: Bearer <token>`
 
-See [`docs/api.md`](docs/api.md) for the full endpoint reference.
+### API documentation
+
+| Guide | Audience |
+|-------|----------|
+| [`docs/user-api.md`](docs/user-api.md) | Customers — auth, catalog, cart, checkout, orders |
+| [`docs/admin-api.md`](docs/admin-api.md) | Admins — dashboard, catalog, fulfillment, refunds |
+
+All routes share the same success/error JSON envelope (`src/shared/response.ts`).
+
+Legacy reference: [`docs/api.md`](docs/api.md)

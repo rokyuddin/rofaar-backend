@@ -6,8 +6,8 @@ import {
     timestamp,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { users } from './user.js';
-import { orders } from './order.js';
+import { users } from './user';
+import { orders } from './order';
 
 // ─── Table ───────────────────────────────────────────────────────────────────
 

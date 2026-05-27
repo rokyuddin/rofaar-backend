@@ -1,49 +1,57 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { inventoryService } from './service.js';
-import { AdjustStockSchema, InventoryLogResponseSchema } from './schema.js';
-import { success } from '@/shared/response.js';
+import { AdjustStockSchema } from './schema.js';
 import { z } from 'zod';
 
 const inventoryRoutes: FastifyPluginAsync = async (fastify) => {
-    const f = fastify.withTypeProvider<ZodTypeProvider>();
-
-    f.register(async (app) => {
+    fastify.register(async (instance) => {
+        const app = instance.withTypeProvider<ZodTypeProvider>();
         app.addHook('onRequest', fastify.authenticate);
-        app.addHook('onRequest', fastify.admin);
+        app.addHook('onRequest', fastify.adminOnly);
 
         app.post('/adjust', {
             schema: {
-                body: AdjustStockSchema,
-                response: { 200: z.object({ success: z.literal(true), data: InventoryLogResponseSchema }) },
+                tags: ['Admin | Inventory'],
+                summary: 'Adjust stock level',
+                description: 'Manually increases or decreases the stock level of a product.',
+                body: AdjustStockSchema
             },
-            handler: async (request) => {
+            handler: async (request, reply) => {
+                const { productId, quantityChange, type, note } = request.body;
                 const log = await inventoryService.adjustStock({
-                    ...request.body,
+                    productId,
+                    quantityChange,
+                    type,
                     performedBy: request.user.id,
+                    ...(note !== undefined ? { note } : {}),
                 });
-                return success(log);
+                return reply.sendOk(log);
             },
         });
 
         app.get('/logs', {
             schema: {
+                tags: ['Admin | Inventory'],
+                summary: 'Get inventory logs',
+                description: 'Returns a history of stock adjustments, optionally filtered by product.',
                 querystring: z.object({ productId: z.string().uuid().optional() }),
-                response: { 200: z.object({ success: z.literal(true), data: z.array(z.any()) }) },
             },
-            handler: async (request) => {
+            handler: async (request, reply) => {
                 const logs = await inventoryService.getLogs(request.query.productId);
-                return success(logs);
+                return reply.sendOk(logs);
             },
         });
 
         app.get('/low-stock', {
             schema: {
-                response: { 200: z.object({ success: z.literal(true), data: z.array(z.any()) }) },
+                tags: ['Admin | Inventory'],
+                summary: 'Get low stock products',
+                description: 'Returns a list of products that are below the low-stock threshold.',
             },
-            handler: async () => {
+            handler: async (_request, reply) => {
                 const products = await inventoryService.getLowStockProducts();
-                return success(products);
+                return reply.sendOk(products);
             },
         });
     }, { prefix: '/admin/inventory' });

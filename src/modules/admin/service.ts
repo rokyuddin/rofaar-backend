@@ -1,8 +1,9 @@
 import { db } from '@/config/db.js';
 import { users } from '@/db/schema/user.js';
-import { orders } from '@/db/schema/order.js';
+import { orders, orderItems } from '@/db/schema/order.js';
 import { products } from '@/db/schema/product.js';
-import { count, sum } from 'drizzle-orm';
+import { count, sum, sql, desc, eq, gte, lte, and } from 'drizzle-orm';
+import type { GetSalesChartInput, GetTopSellingInput } from './schema.js';
 
 export class AdminService {
     async getStats() {
@@ -25,6 +26,61 @@ export class AdminService {
             orderBy: (o, { desc }) => [desc(o.createdAt)],
             with: { user: { columns: { name: true } } },
         });
+    }
+
+    async getSalesChartData(params: GetSalesChartInput) {
+        const { period, startDate, endDate } = params;
+
+        let dateTruncFormat = 'day';
+        if (period === 'weekly') dateTruncFormat = 'week';
+        if (period === 'monthly') dateTruncFormat = 'month';
+
+        const conditions = [];
+        if (startDate) conditions.push(gte(orders.createdAt, new Date(startDate)));
+        if (endDate) conditions.push(lte(orders.createdAt, new Date(endDate)));
+
+        const queryConditions = conditions.length > 0 ? and(...conditions) : undefined;
+
+        const results = await db
+            .select({
+                date: sql<string>`to_char(date_trunc(${dateTruncFormat}, ${orders.createdAt} AT TIME ZONE 'UTC'), 'YYYY-MM-DD')`,
+                revenue: sum(orders.total),
+                orders: count(),
+            })
+            .from(orders)
+            .where(queryConditions)
+            .groupBy(sql`date_trunc(${dateTruncFormat}, ${orders.createdAt} AT TIME ZONE 'UTC')`)
+            .orderBy(sql`date_trunc(${dateTruncFormat}, ${orders.createdAt} AT TIME ZONE 'UTC') ASC`);
+
+        return results.map(row => ({
+            ...row,
+            revenue: Number(row.revenue ?? 0).toFixed(2),
+            orders: Number(row.orders ?? 0),
+        }));
+    }
+
+    async getTopSellingProducts(params: GetTopSellingInput) {
+        const results = await db
+            .select({
+                productId: products.id,
+                name: products.name,
+                slug: products.slug,
+                totalQuantitySold: sum(orderItems.quantity),
+                totalRevenue: sum(orderItems.totalPrice),
+            })
+            .from(orderItems)
+            .innerJoin(products, eq(orderItems.productId, products.id))
+            .innerJoin(orders, eq(orderItems.orderId, orders.id))
+            .where(eq(orders.status, 'delivered')) // Only count completed sales
+            .groupBy(products.id, products.name, products.slug)
+            .orderBy(desc(sum(orderItems.quantity)))
+            .limit(params.limit);
+
+        return results.map(row => ({
+            ...row,
+            totalQuantitySold: Number(row.totalQuantitySold ?? 0),
+            totalRevenue: Number(row.totalRevenue ?? 0).toFixed(2),
+        }));
     }
 }
 

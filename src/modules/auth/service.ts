@@ -5,6 +5,7 @@ import { db } from '@/config/db.js';
 import { users } from '@/db/schema/user.js';
 import { roles } from '@/db/schema/rbac.js';
 import { otps } from '@/db/schema/otp.js';
+import { refreshTokens } from '@/db/schema/session.js';
 import { ConflictError, UnauthorizedError, NotFoundError, BadRequestError } from '@/shared/errors.js';
 
 export class AuthService {
@@ -256,6 +257,70 @@ export class AuthService {
             isVerified: user.isVerified,
             createdAt: user.createdAt.toISOString(),
         };
+    }
+
+    /** Generate and store a new refresh token. */
+    async createRefreshToken(userId: string) {
+        const token = crypto.randomBytes(40).toString('hex');
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+        await db.insert(refreshTokens).values({
+            userId,
+            token,
+            expiresAt,
+        });
+
+        return token;
+    }
+
+    /** Refresh Access Token: returns a new pair of tokens (rotation). */
+    async refreshToken(oldToken: string) {
+        const tokenRecord = await db.query.refreshTokens.findFirst({
+            where: and(
+                eq(refreshTokens.token, oldToken),
+                gt(refreshTokens.expiresAt, new Date())
+            ),
+        });
+
+        if (!tokenRecord) throw new UnauthorizedError('Invalid or expired refresh token');
+
+        // Delete the old token (rotation)
+        await db.delete(refreshTokens).where(eq(refreshTokens.id, tokenRecord.id));
+
+        // Create new refresh token
+        const newToken = await this.createRefreshToken(tokenRecord.userId);
+        
+        // Fetch user info for JWT payload
+        const user = await db.query.users.findFirst({
+            where: eq(users.id, tokenRecord.userId),
+            with: { role: { columns: { name: true } } },
+        });
+
+        if (!user || !user.isActive) throw new UnauthorizedError('User account is inactive');
+
+        return { userId: user.id, refreshToken: newToken };
+    }
+
+    /** Logout: revoke a refresh token. */
+    async logout(token: string) {
+        await db.delete(refreshTokens).where(eq(refreshTokens.token, token));
+    }
+
+    /** Update User Profile. */
+    async updateProfile(userId: string, data: { name?: string | undefined; email?: string | undefined }) {
+        if (data.email) {
+            const emailOwner = await db.query.users.findFirst({
+                where: eq(users.email, data.email),
+            });
+            if (emailOwner && emailOwner.id !== userId) {
+                throw new ConflictError('Email already in use by another account');
+            }
+        }
+
+        await db.update(users).set({
+            ...data,
+            updatedAt: new Date(),
+        }).where(eq(users.id, userId));
     }
 }
 

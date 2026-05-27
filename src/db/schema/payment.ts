@@ -1,6 +1,6 @@
 import { pgTable, uuid, varchar, numeric, text, timestamp, pgEnum } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { orders } from './order.js';
+import { orders } from './order';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
