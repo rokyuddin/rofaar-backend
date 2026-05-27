@@ -42,4 +42,4 @@ COPY --from=builder /app/drizzle.config.ts ./
 EXPOSE 3000
 
 # Start command
-CMD ["pnpm", "start"]
+CMD ["sh", "-c", "pnpm db:migrate && pnpm start"]
