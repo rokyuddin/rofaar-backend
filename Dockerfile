@@ -35,6 +35,7 @@ RUN pnpm install --prod --frozen-lockfile
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/drizzle ./drizzle
+COPY --from=builder /app/src/db ./src/db
 COPY --from=builder /app/drizzle.config.ts ./
 
 # Expose port
