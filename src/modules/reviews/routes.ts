@@ -27,7 +27,7 @@ const reviewRoutes: FastifyPluginAsync = async (fastify) => {
             params: IdParamSchema
         },
         handler: async (request, reply) => {
-            await reviewService.markHelpful(request.params.id);
+            await reviewService.voteHelpful(request.params.id);
             return reply.sendOk(null, 'Marked as helpful');
         },
     });
@@ -100,7 +100,7 @@ const reviewRoutes: FastifyPluginAsync = async (fastify) => {
                 params: IdParamSchema
             },
             handler: async (request, reply) => {
-                await reviewService.adminDelete(request.params.id);
+                await reviewService.delete(request.params.id);
                 return reply.sendOk(null, 'Review deleted by admin');
             },
         });
