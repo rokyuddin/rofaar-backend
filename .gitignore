@@ -23,4 +23,4 @@ Thumbs.db
 .idea/
 
 # Drizzle
-drizzle/
+# drizzle/ (Allow migrations to be committed for production deployment)
