@@ -16,11 +16,8 @@ import { loggerService } from "@/shared/services/logger.js";
 // Routes
 import authRoutes from "@/modules/auth/routes.js";
 import productRoutes from "@/modules/products/routes.js";
-// import { productAdminRoutes } from "@/modules/products/routes.js";
 import categoryRoutes from "@/modules/categories/routes.js";
-import { categoryAdminRoutes } from "@/modules/categories/routes.js";
 import brandRoutes from "@/modules/brands/routes.js";
-import { brandAdminRoutes } from "@/modules/brands/routes.js";
 import bannerRoutes from "@/modules/banners/routes.js";
 import advertisementRoutes from "@/modules/advertisements/routes.js";
 import contactRoutes from "@/modules/contact/routes.js";
@@ -110,8 +107,8 @@ export async function buildApp() {
     async (api) => {
       await api.register(authRoutes);
       await api.register(productRoutes);
-      await api.register(categoryRoutes, { prefix: "/categories" });
-      await api.register(brandRoutes, { prefix: "/brands" });
+      await api.register(categoryRoutes);
+      await api.register(brandRoutes);
       await api.register(bannerRoutes, { prefix: "/banners" });
       await api.register(advertisementRoutes, { prefix: "/advertisements" });
       await api.register(contactRoutes, { prefix: "/contact" });
@@ -121,8 +118,6 @@ export async function buildApp() {
       await api.register(addressRoutes, { prefix: "/addresses" });
       await api.register(couponRoutes, { prefix: "/coupons" });
       await api.register(reviewRoutes, { prefix: "/reviews" });
-      await api.register(categoryAdminRoutes, { prefix: "/admin/categories" });
-      await api.register(brandAdminRoutes, { prefix: "/admin/brands" });
       await api.register(adminRoutes, { prefix: "/admin" });
       await api.register(paymentRoutes, { prefix: "/payments" });
       await api.register(shippingRoutes, { prefix: "/shipping" });
