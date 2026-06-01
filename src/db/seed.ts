@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 /**
  * Database Seed Script
  * -------------------
@@ -9,7 +11,9 @@
 
 import { db } from '@/config/db.js';
 import { roles, permissions, rolePermissions } from '@/db/schema/rbac.js';
+import { users } from '@/db/schema/user';
 import { eq, and } from 'drizzle-orm';
+import bcrypt from 'bcrypt';
 
 // ─── Definitions ──────────────────────────────────────────────────────────────
 
@@ -113,6 +117,31 @@ async function seed() {
                 .onConflictDoNothing();
         }
         console.log(`  🔒  Permissions granted to "${roleName}"`);
+    }
+
+    // 3. Create admin user if none exists
+    const adminEmail = 'rofaar.officail@gmail.com';
+    const adminPhone = '01962349914';
+    const adminPassword = '1234';
+    const adminName = 'Rofaar';
+
+    let existingAdmin = await db.query.users.findFirst({ where: eq(users.email, adminEmail) });
+    if (!existingAdmin) {
+        const saltRounds = 10;
+        const passwordHash = await bcrypt.hash(adminPassword, saltRounds);
+        const [adminUser] = await db.insert(users).values({
+            email: adminEmail,
+            phone: adminPhone,
+            passwordHash: passwordHash,
+            name: adminName,
+            roleId: roleMap.get('super_admin')!, // assign super_admin role
+            isVerified: true,
+            isActive: true,
+            registrationStep: 'completed',
+        }).returning();
+        console.log(`  👤  Created admin user: ${adminEmail}`);
+    } else {
+        console.log(`  ⏭️   Admin user exists: ${adminEmail}`);
     }
 
     console.log('\n✅  Seed complete!');

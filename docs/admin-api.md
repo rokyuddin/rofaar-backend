@@ -214,22 +214,22 @@ GET /admin/top-products?limit=10
 
 Prefix: `/admin/products`.
 
-| Permission | Routes |
-|------------|--------|
-| `read` `products` | `GET /` |
-| `create` `products` | `POST /create` |
-| `update` `products` | `PUT /update/:id` |
-| `delete` `products` | `DELETE /delete/:id` |
+| Method | Path | Permission |
+|--------|------|------------|
+| `GET` | `/` | `read` `products` |
+| `POST` | `/create` | `create` `products` |
+| `PUT` | `/update/:id` | `update` `products` |
+| `DELETE` | `/delete/:id` | `delete` `products` |
 
-### List products (admin)
+### List products
 
 ```http
 GET /admin/products?page=1&limit=20&search=shirt&isActive=true
 ```
 
-Includes inactive products. Query params match public listing plus `isActive=true|false`.
+Returns a paginated list of products, including inactive items. Query params match the public listing plus `isActive=true|false`.
 
-**Response:** `200` — Paginated list of products (same shape as user API but includes all items).
+**Response:** `200` — paginated product list.
 
 ---
 
@@ -333,15 +333,34 @@ DELETE /admin/products/delete/:id
 
 ## 5. Categories & brands
 
-### Categories — `/admin/categories`
+### Categories
+
+Prefix: `/admin/categories`.
 
 | Method | Path | Permission |
 |--------|------|------------|
-| `POST` | `/` | `create` `categories` |
-| `PUT` | `/:id` | `update` `categories` |
-| `DELETE` | `/:id` | `delete` `categories` |
+| `GET` | `/` | `read` `categories` |
+| `POST` | `/create` | `create` `categories` |
+| `PUT` | `/update/:id` | `update` `categories` |
+| `DELETE` | `/delete/:id` | `delete` `categories` |
 
-**Create body:**
+### List categories
+
+```http
+GET /admin/categories
+```
+
+**Response:** `200` — array of categories.
+
+---
+
+### Create category
+
+```http
+POST /admin/categories/create
+```
+
+**Body:**
 
 ```json
 {
@@ -352,7 +371,8 @@ DELETE /admin/products/delete/:id
 }
 ```
 
-**Response (Create/Update):** `200` or `201`
+**Response:** `201`
+
 ```json
 {
   "success": true,
@@ -367,19 +387,86 @@ DELETE /admin/products/delete/:id
 }
 ```
 
+---
+
+### Update category
+
+```http
+PUT /admin/categories/update/:id
+```
+
+`:id` = Category UUID.
+
+**Body:** Partial category fields.
+
+```json
+{
+  "name": "Men's Clothing"
+}
+```
+
+**Response:** `200`
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "name": "Men's Clothing",
+    "slug": "mens-wear",
+    "description": "Clothing for men",
+    "imageUrl": "https://cdn.example.com/cat.jpg",
+    "createdAt": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+---
+
+### Delete category
+
+```http
+DELETE /admin/categories/delete/:id
+```
+
+**Response:** `200`
+
+```json
+{ "success": true, "message": "Category deleted successfully" }
+```
+
 Public read remains: `GET /categories`, `GET /categories/:slug`.
 
 ---
 
-### Brands — `/admin/brands`
+### Brands
+
+Prefix: `/admin/brands`.
 
 | Method | Path | Permission |
 |--------|------|------------|
-| `POST` | `/` | `create` `brands` |
-| `PUT` | `/:id` | `update` `brands` |
-| `DELETE` | `/:id` | `delete` `brands` |
+| `GET` | `/` | `read` `brands` |
+| `POST` | `/create` | `create` `brands` |
+| `PUT` | `/update/:id` | `update` `brands` |
+| `DELETE` | `/delete/:id` | `delete` `brands` |
 
-**Create body:**
+### List brands
+
+```http
+GET /admin/brands
+```
+
+**Response:** `200` — array of brands.
+
+---
+
+### Create brand
+
+```http
+POST /admin/brands/create
+```
+
+**Body:**
 
 ```json
 {
@@ -390,7 +477,8 @@ Public read remains: `GET /categories`, `GET /categories/:slug`.
 }
 ```
 
-**Response (Create/Update):** `200` or `201`
+**Response:** `201`
+
 ```json
 {
   "success": true,
@@ -403,6 +491,54 @@ Public read remains: `GET /categories`, `GET /categories/:slug`.
     "createdAt": "2024-01-01T00:00:00.000Z"
   }
 }
+```
+
+---
+
+### Update brand
+
+```http
+PUT /admin/brands/update/:id
+```
+
+`:id` = Brand UUID.
+
+**Body:** Partial brand fields.
+
+```json
+{
+  "description": "Updated house brand"
+}
+```
+
+**Response:** `200`
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "name": "Rofaar Basics",
+    "slug": "rofaar-basics",
+    "description": "Updated house brand",
+    "logoUrl": "https://cdn.example.com/logo.png",
+    "createdAt": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+---
+
+### Delete brand
+
+```http
+DELETE /admin/brands/delete/:id
+```
+
+**Response:** `200`
+
+```json
+{ "success": true, "message": "Brand deleted successfully" }
 ```
 
 ---
@@ -1213,8 +1349,8 @@ Routes using `adminOnly` (dashboard, inventory, shipping) require `admin` or `su
 | Dashboard | GET | `/admin/sales-chart` |
 | Dashboard | GET | `/admin/top-products` |
 | Products | GET/POST/PUT/DELETE | `/admin/products/...` |
-| Categories | POST/PUT/DELETE | `/admin/categories/...` |
-| Brands | POST/PUT/DELETE | `/admin/brands/...` |
+| Categories | GET/POST/PUT/DELETE | `/admin/categories/...` |
+| Brands | GET/POST/PUT/DELETE | `/admin/brands/...` |
 | Banners | GET/POST/PUT/DELETE | `/admin/banners/...` |
 | Ads | GET/POST/PUT/DELETE | `/admin/advertisements/...` |
 | Inventory | POST/GET | `/admin/inventory/adjust`, `/logs`, `/low-stock` |
