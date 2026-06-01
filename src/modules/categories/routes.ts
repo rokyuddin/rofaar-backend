@@ -1,7 +1,12 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { categoryService } from "./service.js";
-import { CreateCategorySchema, UpdateCategorySchema } from "./schema.js";
+import {
+  CreateCategorySchema,
+  UpdateCategorySchema,
+  CategoryParamsSchema,
+  AdminCategoryParamsSchema,
+} from "./schema.js";
 import { IdParamSchema, SlugParamSchema } from "@/shared/types.js";
 
 const categoryRoutes: FastifyPluginAsync = async (fastify) => {
@@ -14,11 +19,16 @@ const categoryRoutes: FastifyPluginAsync = async (fastify) => {
         schema: {
           tags: ["Categories"],
           summary: "List categories",
-          description: "Returns all active categories.",
+          description: "Returns a paginated list of active categories.",
+          querystring: CategoryParamsSchema,
         },
-        handler: async (_request, reply) => {
-          const categories = await categoryService.list();
-          return reply.sendOk(categories);
+        handler: async (request, reply) => {
+          const { rows, total } = await categoryService.list(request.query);
+          return reply.sendPaginated(rows, {
+            page: request.query.page,
+            limit: request.query.limit,
+            total,
+          });
         },
       });
 
@@ -49,14 +59,20 @@ const categoryRoutes: FastifyPluginAsync = async (fastify) => {
         schema: {
           tags: ["Admin | Categories"],
           summary: "List categories (Admin)",
+          description: "Returns a paginated list of all categories.",
+          querystring: AdminCategoryParamsSchema,
         },
-        handler: async (_request, reply) => {
-          const categories = await categoryService.list();
-          return reply.sendOk(categories);
+        handler: async (request, reply) => {
+          const { rows, total } = await categoryService.adminList(request.query);
+          return reply.sendPaginated(rows, {
+            page: request.query.page,
+            limit: request.query.limit,
+            total,
+          });
         },
       });
 
-      app.post("/create", {
+      app.post("/", {
         preHandler: [fastify.requirePermission("create", "categories")],
         schema: {
           tags: ["Admin | Categories"],
@@ -69,7 +85,7 @@ const categoryRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      app.put("/update/:id", {
+      app.put("/:id", {
         preHandler: [fastify.requirePermission("update", "categories")],
         schema: {
           tags: ["Admin | Categories"],
@@ -86,7 +102,7 @@ const categoryRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      app.delete("/delete/:id", {
+      app.delete("/:id", {
         preHandler: [fastify.requirePermission("delete", "categories")],
         schema: {
           tags: ["Admin | Categories"],

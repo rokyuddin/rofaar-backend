@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, boolean } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { products } from './product';
 
@@ -10,6 +10,7 @@ export const categories = pgTable('categories', {
     slug: varchar('slug', { length: 100 }).notNull().unique(),
     description: text('description'),
     imageUrl: text('image_url'),
+    isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

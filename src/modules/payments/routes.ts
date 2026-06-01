@@ -5,37 +5,48 @@ import { OnAirPaymentSchema } from './schema.js';
 import { IdParamSchema } from '@/shared/types.js';
 
 const paymentRoutes: FastifyPluginAsync = async (fastify) => {
-    const app = fastify.withTypeProvider<ZodTypeProvider>();
-    app.addHook('onRequest', fastify.authenticate);
+  fastify.register(
+    async (instance) => {
+      const app = instance.withTypeProvider<ZodTypeProvider>();
+      app.addHook("onRequest", fastify.authenticate);
 
-    app.post('/orders/:id/pay', {
+      app.post("/orders/:id/pay", {
         schema: {
-            tags: ['Payments'],
-            summary: 'Submit payment details',
-            params: IdParamSchema,
-            body: OnAirPaymentSchema
+          tags: ["Payments"],
+          summary: "Submit payment details",
+          params: IdParamSchema,
+          body: OnAirPaymentSchema,
         },
         handler: async (request, reply) => {
-            const result = await paymentService.submitOnAirPayment(
-                request.params.id,
-                request.user.id,
-                request.body
-            );
-            return reply.sendCreated(result, 'Payment submitted for verification');
+          const result = await paymentService.submitOnAirPayment(
+            request.params.id,
+            request.user.id,
+            request.body,
+          );
+          return reply.sendCreated(
+            result,
+            "Payment submitted for verification",
+          );
         },
-    });
+      });
 
-    app.get('/orders/:id/payment', {
+      app.get("/orders/:id/payment", {
         schema: {
-            tags: ['Payments'],
-            summary: 'Get order payments',
-            params: IdParamSchema
+          tags: ["Payments"],
+          summary: "Get order payments",
+          params: IdParamSchema,
         },
         handler: async (request, reply) => {
-            const records = await paymentService.getByOrder(request.params.id, request.user.id);
-            return reply.sendOk(records);
+          const records = await paymentService.getByOrder(
+            request.params.id,
+            request.user.id,
+          );
+          return reply.sendOk(records);
         },
-    });
+      });
+    },
+    { prefix: "/payments" },
+  );
 };
 
 export default paymentRoutes;

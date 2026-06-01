@@ -11,7 +11,7 @@ const cartRoutes: FastifyPluginAsync = async (fastify) => {
         const app = instance.withTypeProvider<ZodTypeProvider>();
         app.addHook('onRequest', fastify.authenticate);
 
-        app.get('/list', {
+        app.get('/', {
             schema: {
                 tags: ['Cart'],
                 summary: 'Get cart items',
@@ -23,7 +23,7 @@ const cartRoutes: FastifyPluginAsync = async (fastify) => {
             },
         });
 
-        app.post('/add', {
+        app.post('/', {
             schema: {
                 tags: ['Cart'],
                 summary: 'Add item to cart',
@@ -36,7 +36,7 @@ const cartRoutes: FastifyPluginAsync = async (fastify) => {
             },
         });
 
-        app.put('/update/:id', {
+        app.put('/:id', {
             schema: {
                 tags: ['Cart'],
                 summary: 'Update cart item',
@@ -50,7 +50,7 @@ const cartRoutes: FastifyPluginAsync = async (fastify) => {
             },
         });
 
-        app.delete('/remove/:id', {
+        app.delete('/:id', {
             schema: {
                 tags: ['Cart'],
                 summary: 'Remove cart item',
@@ -63,7 +63,7 @@ const cartRoutes: FastifyPluginAsync = async (fastify) => {
             },
         });
 
-        app.delete('/clear', {
+        app.delete('/', {
             schema: {
                 tags: ['Cart'],
                 summary: 'Clear cart',

@@ -8,8 +8,13 @@ import {
   AdminProductParamsSchema,
   CreateProductSchema,
   UpdateProductSchema,
+  type FileUpload,
 } from "./schema.js";
 import { IdParamSchema } from "@/shared/types.js";
+import { BadRequestError } from "@/shared/errors.js";
+
+const ALLOWED_MIMETYPES = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 const productRoutes: FastifyPluginAsync = async (fastify) => {
   // ─── Public Routes ─────────────────────────────────────────────────────────
@@ -113,39 +118,133 @@ const productRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      app.post("/create", {
+      app.post("/", {
         preHandler: [fastify.requirePermission("create", "products")],
         schema: {
           tags: ["Admin | Products"],
           summary: "Create product",
-          description: "Creates a new product in the catalog.",
-          body: CreateProductSchema,
+          description: "Creates a new product in the catalog with images.",
         },
         handler: async (request, reply) => {
-          const product = await productService.create(request.body);
+          const parts = request.parts();
+          const body: any = {};
+          const imageFiles: FileUpload[] = [];
+
+          for await (const part of parts) {
+            if (part.type === "file") {
+              if (!ALLOWED_MIMETYPES.includes(part.mimetype)) {
+                throw new BadRequestError(`Invalid file type: ${part.mimetype}`);
+              }
+
+              const buffer = await part.toBuffer();
+              if (buffer.length > MAX_FILE_SIZE) {
+                throw new BadRequestError(
+                  `File too large: ${part.filename} exceeds 5MB`,
+                );
+              }
+
+              imageFiles.push({
+                filename: part.filename,
+                mimetype: part.mimetype,
+                data: buffer,
+              });
+            } else {
+              body[part.fieldname] = part.value;
+            }
+          }
+
+          // Convert types for multipart fields
+          const payload = {
+            ...body,
+            price: body.price ? Number(body.price) : undefined,
+            costPrice: body.costPrice ? Number(body.costPrice) : undefined,
+            discountPercentage: body.discountPercentage
+              ? Number(body.discountPercentage)
+              : undefined,
+            stock: body.stock ? Number(body.stock) : undefined,
+            isActive:
+              body.isActive === "true"
+                ? true
+                : body.isActive === "false"
+                  ? false
+                  : undefined,
+          };
+
+          const validatedData = CreateProductSchema.parse(payload);
+          const product = await productService.create({
+            ...validatedData,
+            imageFiles,
+          });
           return reply.sendCreated(product);
         },
       });
 
-      app.put("/update/:id", {
+      app.put("/:id", {
         preHandler: [fastify.requirePermission("update", "products")],
         schema: {
           tags: ["Admin | Products"],
           summary: "Update product",
-          description: "Updates an existing product in the catalog.",
+          description:
+            "Updates an existing product in the catalog, including images.",
           params: IdParamSchema,
-          body: UpdateProductSchema,
         },
         handler: async (request, reply) => {
-          const product = await productService.update(
-            request.params.id,
-            request.body,
-          );
+          const parts = request.parts();
+          const body: any = {};
+          const imageFiles: FileUpload[] = [];
+
+          for await (const part of parts) {
+            if (part.type === "file") {
+              if (!ALLOWED_MIMETYPES.includes(part.mimetype)) {
+                throw new BadRequestError(`Invalid file type: ${part.mimetype}`);
+              }
+
+              const buffer = await part.toBuffer();
+              if (buffer.length > MAX_FILE_SIZE) {
+                throw new BadRequestError(
+                  `File too large: ${part.filename} exceeds 5MB`,
+                );
+              }
+
+              imageFiles.push({
+                filename: part.filename,
+                mimetype: part.mimetype,
+                data: buffer,
+              });
+            } else {
+              body[part.fieldname] = part.value;
+            }
+          }
+
+          // Convert types for multipart fields
+          const payload = {
+            ...body,
+            price: body.price ? Number(body.price) : undefined,
+            costPrice: body.costPrice ? Number(body.costPrice) : undefined,
+            discountPercentage: body.discountPercentage
+              ? Number(body.discountPercentage)
+              : undefined,
+            stock: body.stock ? Number(body.stock) : undefined,
+            isActive:
+              body.isActive === "true"
+                ? true
+                : body.isActive === "false"
+                  ? false
+                  : undefined,
+            // Handle existing images if passed as JSON string
+            images: body.images ? JSON.parse(body.images) : undefined,
+          };
+
+          const validatedData = UpdateProductSchema.parse(payload);
+          const product = await productService.update(request.params.id, {
+            ...validatedData,
+            imageFiles,
+          });
           return reply.sendOk(product);
         },
       });
 
-      app.delete("/delete/:id", {
+      app.delete("/:id", {
         preHandler: [fastify.requirePermission("delete", "products")],
         schema: {
           tags: ["Admin | Products"],

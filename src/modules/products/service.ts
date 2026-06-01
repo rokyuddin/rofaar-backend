@@ -1,15 +1,28 @@
 import { eq, and, gte, lte, ilike, count, sql, desc, asc } from "drizzle-orm";
 import { db } from "@/config/db.js";
 import { products, productImages } from "@/db/schema/product.js";
+import { uploadService } from "@/shared/services/upload.js";
 import { NotFoundError } from "@/shared/errors.js";
 import type {
   CreateProduct,
   UpdateProduct,
   ProductParams,
   AdminProductParams,
+  FileUpload,
 } from "./schema.js";
 
 export class ProductService {
+  private enrichProduct(product: any) {
+    if (!product) return product;
+    const price = parseFloat(product.price);
+    const discount = product.discountPercentage || 0;
+    const finalPrice = price * (1 - discount / 100);
+    return {
+      ...product,
+      finalPrice: Math.round(finalPrice * 100) / 100,
+    };
+  }
+
   async list(filters: ProductParams) {
     const { page, limit, category, brand, minPrice, maxPrice, search, sort } =
       filters;
@@ -24,13 +37,15 @@ export class ProductService {
       conditions.push(lte(sql`CAST(${products.price} AS NUMERIC)`, maxPrice));
     if (search) conditions.push(ilike(products.name, `%${search}%`));
 
+    const finalPriceExpr = sql`CAST(${products.price} AS NUMERIC) * (1 - CAST(${products.discountPercentage} AS NUMERIC) / 100)`;
+
     let orderBy;
     switch (sort) {
       case "price-low":
-        orderBy = [asc(products.price)];
+        orderBy = [asc(finalPriceExpr)];
         break;
       case "price-high":
-        orderBy = [desc(products.price)];
+        orderBy = [desc(finalPriceExpr)];
         break;
       case "popular":
         // For now, sorting by stock as a placeholder for popularity
@@ -61,7 +76,7 @@ export class ProductService {
     ]);
 
     return {
-      rows,
+      rows: rows.map((r) => this.enrichProduct(r)),
       total: Number(totalResult[0]?.value ?? 0),
     };
   }
@@ -91,13 +106,15 @@ export class ProductService {
       conditions.push(lte(sql`CAST(${products.price} AS NUMERIC)`, maxPrice));
     if (search) conditions.push(ilike(products.name, `%${search}%`));
 
+    const finalPriceExpr = sql`CAST(${products.price} AS NUMERIC) * (1 - CAST(${products.discountPercentage} AS NUMERIC) / 100)`;
+
     let orderBy;
     switch (sort) {
       case "price-low":
-        orderBy = [asc(products.price)];
+        orderBy = [asc(finalPriceExpr)];
         break;
       case "price-high":
-        orderBy = [desc(products.price)];
+        orderBy = [desc(finalPriceExpr)];
         break;
       case "popular":
         orderBy = [desc(products.stock)];
@@ -127,7 +144,7 @@ export class ProductService {
     ]);
 
     return {
-      rows,
+      rows: rows.map((r) => this.enrichProduct(r)),
       total: Number(totalResult[0]?.value ?? 0),
     };
   }
@@ -143,71 +160,154 @@ export class ProductService {
       },
     });
     if (!product) throw new NotFoundError("Product");
-    return product;
+    return this.enrichProduct(product);
   }
 
-  async create(data: CreateProduct) {
-    const { images, ...productData } = data;
+  async create(data: CreateProduct & { imageFiles?: FileUpload[] }) {
+    const { images: existingImages, imageFiles, ...productData } = data;
+    const uploadedUrls: string[] = [];
 
-    return await db.transaction(async (tx) => {
-      const [product] = await tx
-        .insert(products)
-        .values({
-          ...productData,
-          price: productData.price.toString(),
-        })
-        .returning();
+    try {
+      if (imageFiles && imageFiles.length > 0) {
+        for (const file of imageFiles) {
+          const url = await uploadService.uploadFile(
+            file.filename,
+            file.mimetype,
+            file.data,
+          );
+          uploadedUrls.push(url);
+        }
+      }
 
-      if (images && images.length > 0) {
-        await tx.insert(productImages).values(
-          images.map((img: any) => ({
-            productId: product!.id,
+      return await db.transaction(async (tx) => {
+        const [product] = await tx
+          .insert(products)
+          .values({
+            ...productData,
+            price: productData.price.toString(),
+            costPrice: productData.costPrice.toString(),
+            discountPercentage: productData.discountPercentage,
+          })
+          .returning();
+
+        if (!product) throw new Error("Product creation failed");
+
+        const allImages = [
+          ...(existingImages || []).map((img) => ({
             url: img.url,
             sortOrder: img.sortOrder,
           })),
-        );
-      }
+          ...uploadedUrls.map((url, index) => ({
+            url,
+            sortOrder: (existingImages?.length || 0) + index,
+          })),
+        ];
 
-      const result = await this.getById(product!.id);
-      if (!result) throw new Error("Product creation failed");
-      return result;
-    });
-  }
-
-  async update(id: string, data: UpdateProduct) {
-    const { images, ...productData } = data;
-
-    return await db.transaction(async (tx) => {
-      const [product] = await tx
-        .update(products)
-        .set({
-          ...productData,
-          price: productData.price?.toString(),
-          updatedAt: new Date(),
-        })
-        .where(eq(products.id, id))
-        .returning();
-
-      if (!product) throw new NotFoundError("Product");
-
-      if (images) {
-        // Simplified: Replace all images
-        await tx.delete(productImages).where(eq(productImages.productId, id));
-        if (images.length > 0) {
+        if (allImages.length > 0) {
           await tx.insert(productImages).values(
-            images.map((img: any) => ({
-              productId: id,
+            allImages.map((img) => ({
+              productId: product.id,
               url: img.url,
               sortOrder: img.sortOrder,
             })),
           );
         }
+
+        const result = await tx.query.products.findFirst({
+          where: eq(products.id, product.id),
+          with: {
+            category: true,
+            brand: true,
+            images: { orderBy: (i, { asc }) => [asc(i.sortOrder)] },
+          },
+        });
+
+        if (!result) throw new Error("Product retrieval failed");
+        return this.enrichProduct(result);
+      });
+    } catch (error) {
+      for (const url of uploadedUrls) {
+        const key = url.split("/").pop();
+        if (key) await uploadService.deleteFile(key).catch(console.error);
+      }
+      throw error;
+    }
+  }
+
+  async update(id: string, data: UpdateProduct & { imageFiles?: FileUpload[] }) {
+    const { images: existingImages, imageFiles, ...productData } = data;
+    const uploadedUrls: string[] = [];
+
+    try {
+      if (imageFiles && imageFiles.length > 0) {
+        for (const file of imageFiles) {
+          const url = await uploadService.uploadFile(
+            file.filename,
+            file.mimetype,
+            file.data,
+          );
+          uploadedUrls.push(url);
+        }
       }
 
-      const result = await this.getById(id);
-      if (!result) throw new Error("Product update failed");
-      return result;
-    });
+      return await db.transaction(async (tx) => {
+        const [product] = await tx
+          .update(products)
+          .set({
+            ...productData,
+            price: productData.price?.toString(),
+            costPrice: productData.costPrice?.toString(),
+            discountPercentage: productData.discountPercentage,
+            updatedAt: new Date(),
+          })
+          .where(eq(products.id, id))
+          .returning();
+
+        if (!product) throw new NotFoundError("Product");
+
+        if (existingImages || uploadedUrls.length > 0) {
+          await tx.delete(productImages).where(eq(productImages.productId, id));
+
+          const allImages = [
+            ...(existingImages || []).map((img) => ({
+              url: img.url,
+              sortOrder: img.sortOrder,
+            })),
+            ...uploadedUrls.map((url, index) => ({
+              url,
+              sortOrder: (existingImages?.length || 0) + index,
+            })),
+          ];
+
+          if (allImages.length > 0) {
+            await tx.insert(productImages).values(
+              allImages.map((img) => ({
+                productId: id,
+                url: img.url,
+                sortOrder: img.sortOrder,
+              })),
+            );
+          }
+        }
+
+        const result = await tx.query.products.findFirst({
+          where: eq(products.id, id),
+          with: {
+            category: true,
+            brand: true,
+            images: { orderBy: (i, { asc }) => [asc(i.sortOrder)] },
+          },
+        });
+        if (!result) throw new Error("Product retrieval failed");
+        return this.enrichProduct(result);
+      });
+    } catch (error) {
+      for (const url of uploadedUrls) {
+        const key = url.split("/").pop();
+        if (key) await uploadService.deleteFile(key).catch(console.error);
+      }
+      throw error;
+    }
   }
 
   async delete(id: string) {
@@ -220,7 +320,7 @@ export class ProductService {
   }
 
   async getById(id: string) {
-    return db.query.products.findFirst({
+    const product = await db.query.products.findFirst({
       where: eq(products.id, id),
       with: {
         category: true,
@@ -228,6 +328,7 @@ export class ProductService {
         images: { orderBy: (i, { asc }) => [asc(i.sortOrder)] },
       },
     });
+    return this.enrichProduct(product);
   }
 }
 

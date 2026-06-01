@@ -24,6 +24,8 @@ export const products = pgTable('products', {
     slug: varchar('slug', { length: 255 }).notNull().unique(),
     description: text('description'),
     price: numeric('price', { precision: 10, scale: 2 }).notNull(),
+    costPrice: numeric('cost_price', { precision: 10, scale: 2 }).notNull().default('0.00'),
+    discountPercentage: integer('discount_percentage').notNull().default(0),
     stock: integer('stock').notNull().default(0),
     lowStockThreshold: integer('low_stock_threshold').notNull().default(10),
     isActive: boolean('is_active').notNull().default(true),

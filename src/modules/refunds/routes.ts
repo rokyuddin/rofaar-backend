@@ -32,7 +32,7 @@ const refundRoutes: FastifyPluginAsync = async (fastify) => {
                 return reply.sendOk(refunds);
             },
         });
-    });
+    }, { prefix: '/refunds' });
 
     // ─── Admin Routes ─────────────────────────────────────────────────────────
     fastify.register(async (instance) => {

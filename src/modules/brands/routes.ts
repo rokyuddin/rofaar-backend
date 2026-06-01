@@ -1,7 +1,12 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { brandService } from "./service.js";
-import { CreateBrandSchema, UpdateBrandSchema } from "./schema.js";
+import {
+  CreateBrandSchema,
+  UpdateBrandSchema,
+  BrandParamsSchema,
+  AdminBrandParamsSchema,
+} from "./schema.js";
 import { IdParamSchema, SlugParamSchema } from "@/shared/types.js";
 
 const brandRoutes: FastifyPluginAsync = async (fastify) => {
@@ -14,11 +19,16 @@ const brandRoutes: FastifyPluginAsync = async (fastify) => {
         schema: {
           tags: ["Brands"],
           summary: "List brands",
-          description: "Returns all active brands.",
+          description: "Returns a paginated list of active brands.",
+          querystring: BrandParamsSchema,
         },
-        handler: async (_request, reply) => {
-          const brands = await brandService.list();
-          return reply.sendOk(brands);
+        handler: async (request, reply) => {
+          const { rows, total } = await brandService.list(request.query);
+          return reply.sendPaginated(rows, {
+            page: request.query.page,
+            limit: request.query.limit,
+            total,
+          });
         },
       });
 
@@ -49,14 +59,20 @@ const brandRoutes: FastifyPluginAsync = async (fastify) => {
         schema: {
           tags: ["Admin | Brands"],
           summary: "List brands (Admin)",
+          description: "Returns a paginated list of all brands.",
+          querystring: AdminBrandParamsSchema,
         },
-        handler: async (_request, reply) => {
-          const brands = await brandService.list();
-          return reply.sendOk(brands);
+        handler: async (request, reply) => {
+          const { rows, total } = await brandService.adminList(request.query);
+          return reply.sendPaginated(rows, {
+            page: request.query.page,
+            limit: request.query.limit,
+            total,
+          });
         },
       });
 
-      app.post("/create", {
+      app.post("/", {
         preHandler: [fastify.requirePermission("create", "brands")],
         schema: {
           tags: ["Admin | Brands"],
@@ -69,7 +85,7 @@ const brandRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      app.put("/update/:id", {
+      app.put("/:id", {
         preHandler: [fastify.requirePermission("update", "brands")],
         schema: {
           tags: ["Admin | Brands"],
@@ -83,7 +99,7 @@ const brandRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      app.delete("/delete/:id", {
+      app.delete("/:id", {
         preHandler: [fastify.requirePermission("delete", "brands")],
         schema: {
           tags: ["Admin | Brands"],

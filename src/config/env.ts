@@ -8,6 +8,11 @@ const envSchema = z.object({
     JWT_EXPIRES_IN: z.string().default('7d'),
     ENABLE_SWAGGER: z.string().optional().default('true'),
     API_HOST: z.string().optional().default('localhost:3000'),
+    R2_ACCOUNT_ID: z.string().optional(),
+    R2_ACCESS_KEY_ID: z.string().optional(),
+    R2_SECRET_ACCESS_KEY: z.string().optional(),
+    R2_BUCKET_NAME: z.string().optional(),
+    R2_PUBLIC_URL: z.string().url().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

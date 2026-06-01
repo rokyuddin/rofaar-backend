@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import cookie from "@fastify/cookie";
+import multipart from "@fastify/multipart";
 import { env } from "@/config/env.js";
 
 // Plugins
@@ -16,6 +17,7 @@ import { loggerService } from "@/shared/services/logger.js";
 // Routes
 import authRoutes from "@/modules/auth/routes.js";
 import productRoutes from "@/modules/products/routes.js";
+import uploadRoutes from "@/modules/uploads/routes.js";
 import categoryRoutes from "@/modules/categories/routes.js";
 import brandRoutes from "@/modules/brands/routes.js";
 import bannerRoutes from "@/modules/banners/routes.js";
@@ -50,12 +52,13 @@ export async function buildApp() {
     trustProxy: true,
   });
 
-  // ─── Core Plugins (Must be first) ──────────────────────────────────────────
-  await app.register(zodPlugin);
-  await app.register(responsePlugin);
-  await app.register(cookie, { secret: env.JWT_SECRET });
-  await app.register(authPlugin); // Register auth early for decorators
-  await app.register(swaggerPlugin);
+// ─── Core Plugins (Must be first) ──────────────────────────────────────────
+   await app.register(zodPlugin);
+   await app.register(responsePlugin);
+   await app.register(cookie, { secret: env.JWT_SECRET });
+   await app.register(multipart);
+   await app.register(authPlugin); // Register auth early for decorators
+   await app.register(swaggerPlugin);
 
   // ─── Utility Plugins ──────────────────────────────────────────────────────
   await app.register(errorHandlerPlugin);
@@ -109,23 +112,24 @@ export async function buildApp() {
       await api.register(productRoutes);
       await api.register(categoryRoutes);
       await api.register(brandRoutes);
-      await api.register(bannerRoutes, { prefix: "/banners" });
-      await api.register(advertisementRoutes, { prefix: "/advertisements" });
-      await api.register(contactRoutes, { prefix: "/contact" });
-      await api.register(cartRoutes, { prefix: "/cart" });
-      await api.register(orderRoutes, { prefix: "/orders" });
-      await api.register(wishlistRoutes, { prefix: "/wishlist" });
-      await api.register(addressRoutes, { prefix: "/addresses" });
-      await api.register(couponRoutes, { prefix: "/coupons" });
-      await api.register(reviewRoutes, { prefix: "/reviews" });
-      await api.register(adminRoutes, { prefix: "/admin" });
-      await api.register(paymentRoutes, { prefix: "/payments" });
-      await api.register(shippingRoutes, { prefix: "/shipping" });
-      await api.register(refundRoutes, { prefix: "/refunds" });
-      await api.register(inventoryRoutes, { prefix: "/inventory" });
-      await api.register(userRoutes, { prefix: "/users" });
-      await api.register(qaRoutes, { prefix: "/qa" });
-      await api.register(searchRoutes, { prefix: "/search" });
+      await api.register(bannerRoutes);
+      await api.register(advertisementRoutes);
+      await api.register(contactRoutes);
+      await api.register(cartRoutes);
+      await api.register(orderRoutes);
+      await api.register(wishlistRoutes);
+      await api.register(addressRoutes);
+      await api.register(couponRoutes);
+      await api.register(reviewRoutes);
+      await api.register(adminRoutes);
+      await api.register(paymentRoutes);
+      await api.register(shippingRoutes);
+      await api.register(refundRoutes);
+      await api.register(inventoryRoutes);
+      await api.register(userRoutes);
+      await api.register(qaRoutes);
+      await api.register(searchRoutes);
+      await api.register(uploadRoutes);
     },
     { prefix: "/api/v1" },
   );

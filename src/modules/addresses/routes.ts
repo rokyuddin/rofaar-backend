@@ -5,56 +5,68 @@ import { CreateAddressSchema, UpdateAddressSchema } from './schema.js';
 import { IdParamSchema } from '@/shared/types.js';
 
 const addressRoutes: FastifyPluginAsync = async (fastify) => {
-    const app = fastify.withTypeProvider<ZodTypeProvider>();
-    app.addHook('onRequest', fastify.authenticate);
+  fastify.register(
+    async (instance) => {
+      const app = instance.withTypeProvider<ZodTypeProvider>();
+      app.addHook("onRequest", fastify.authenticate);
 
-    app.get('/', {
+      app.get("/", {
         schema: {
-            tags: ['Addresses'],
-            summary: 'List addresses',
+          tags: ["Addresses"],
+          summary: "List addresses",
         },
         handler: async (request, reply) => {
-            const addresses = await addressService.list(request.user.id);
-            return reply.sendOk(addresses);
+          const addresses = await addressService.list(request.user.id);
+          return reply.sendOk(addresses);
         },
-    });
+      });
 
-    app.post('/', {
+      app.post("/", {
         schema: {
-            tags: ['Addresses'],
-            summary: 'Create address',
-            body: CreateAddressSchema
+          tags: ["Addresses"],
+          summary: "Create address",
+          body: CreateAddressSchema,
         },
         handler: async (request, reply) => {
-            const address = await addressService.create(request.user.id, request.body);
-            return reply.sendCreated(address);
+          const address = await addressService.create(
+            request.user.id,
+            request.body,
+          );
+          return reply.sendCreated(address);
         },
-    });
+      });
 
-    app.put('/:id', {
+      app.put("/:id", {
         schema: {
-            tags: ['Addresses'],
-            summary: 'Update address',
-            params: IdParamSchema,
-            body: UpdateAddressSchema
+          tags: ["Addresses"],
+          summary: "Update address",
+          params: IdParamSchema,
+          body: UpdateAddressSchema,
         },
         handler: async (request, reply) => {
-            const address = await addressService.update(request.user.id, request.params.id, request.body);
-            return reply.sendOk(address);
+          const address = await addressService.update(
+            request.user.id,
+            request.params.id,
+            request.body,
+          );
+          return reply.sendOk(address);
         },
-    });
+      });
 
-    app.delete('/:id', {
+      app.delete("/:id", {
         schema: {
-            tags: ['Addresses'],
-            summary: 'Delete address',
-            params: IdParamSchema
+          tags: ["Addresses"],
+          summary: "Delete address",
+          params: IdParamSchema,
         },
         handler: async (request, reply) => {
-            await addressService.delete(request.user.id, request.params.id);
-            return reply.sendOk(null, 'Address deleted successfully');
+          await addressService.delete(request.user.id, request.params.id);
+          return reply.sendOk(null, "Address deleted successfully");
         },
-    });
+      });
+    },
+    { prefix: "/addresses" },
+  );
 };
 
 export default addressRoutes;
