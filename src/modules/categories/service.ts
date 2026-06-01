@@ -2,7 +2,8 @@ import { eq, ilike, and, count } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import { categories } from '@/db/schema/category.js';
 import { NotFoundError } from '@/shared/errors.js';
-import type { CreateCategory, UpdateCategory, CategoryParams, AdminCategoryParams } from './schema.js';
+import { uploadService } from "@/shared/services/upload.js";
+import type { CreateCategory, UpdateCategory, CategoryParams, AdminCategoryParams, FileUpload } from './schema.js';
 
 export class CategoryService {
     async list(filters: CategoryParams = { page: 1, limit: 10 }) {
@@ -68,21 +69,64 @@ export class CategoryService {
         return category;
     }
 
-    async create(data: CreateCategory) {
-        const [category] = await db.insert(categories).values(data).returning();
-        return category!;
+    async create(data: CreateCategory & { imageFile?: FileUpload }) {
+        const { imageFile, ...categoryData } = data;
+        let imageUrl = categoryData.imageUrl;
+
+        try {
+            if (imageFile) {
+                imageUrl = await uploadService.uploadFile(
+                    `categories/${imageFile.filename}`,
+                    imageFile.mimetype,
+                    imageFile.data
+                );
+            }
+
+            const [category] = await db.insert(categories).values({
+                ...categoryData,
+                imageUrl,
+            }).returning();
+            return category!;
+        } catch (error) {
+            if (imageUrl && imageFile) {
+                const key = imageUrl.split('/').pop();
+                if (key) await uploadService.deleteFile(`categories/${key}`).catch(console.error);
+            }
+            throw error;
+        }
     }
 
-    async update(id: string, data: UpdateCategory) {
+    async update(id: string, data: UpdateCategory & { imageFile?: FileUpload }) {
+        const { imageFile, ...categoryData } = data;
+        let imageUrl = categoryData.imageUrl;
 
-        const [category] = await db
-            .update(categories)
-            .set(data)
-            .where(eq(categories.id, id))
-            .returning();
-        
-        if (!category) throw new NotFoundError('Category');
-        return category;
+        try {
+            if (imageFile) {
+                imageUrl = await uploadService.uploadFile(
+                    `categories/${imageFile.filename}`,
+                    imageFile.mimetype,
+                    imageFile.data
+                );
+            }
+
+            const [category] = await db
+                .update(categories)
+                .set({
+                    ...categoryData,
+                    imageUrl,
+                })
+                .where(eq(categories.id, id))
+                .returning();
+            
+            if (!category) throw new NotFoundError('Category');
+            return category;
+        } catch (error) {
+            if (imageUrl && imageFile) {
+                const key = imageUrl.split('/').pop();
+                if (key) await uploadService.deleteFile(`categories/${key}`).catch(console.error);
+            }
+            throw error;
+        }
     }
 
     async delete(id: string) {

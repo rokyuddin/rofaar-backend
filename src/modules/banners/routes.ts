@@ -1,8 +1,16 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { bannerService } from './service.js';
-import { CreateBannerSchema, UpdateBannerSchema } from './schema.js';
-import { IdParamSchema } from '@/shared/types.js';
+import {
+  CreateBannerSchema,
+  UpdateBannerSchema,
+  type FileUpload,
+} from "./schema.js";
+import { IdParamSchema } from "@/shared/types.js";
+import { BadRequestError } from "@/shared/errors.js";
+
+const ALLOWED_MIMETYPES = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB for banners
 
 const bannerRoutes: FastifyPluginAsync = async (fastify) => {
   // ─── Public Routes ─────────────────────────────────────────────────────────
@@ -49,10 +57,52 @@ const bannerRoutes: FastifyPluginAsync = async (fastify) => {
         schema: {
           tags: ["Admin | Banners"],
           summary: "Create banner",
-          body: CreateBannerSchema,
+          description: "Creates a new banner with an optional image.",
         },
         handler: async (request, reply) => {
-          const banner = await bannerService.create(request.body);
+          const parts = request.parts();
+          const body: any = {};
+          let imageFile: FileUpload | undefined;
+
+          for await (const part of parts) {
+            if (part.type === "file") {
+              if (!ALLOWED_MIMETYPES.includes(part.mimetype)) {
+                throw new BadRequestError(`Invalid file type: ${part.mimetype}`);
+              }
+
+              const buffer = await part.toBuffer();
+              if (buffer.length > MAX_FILE_SIZE) {
+                throw new BadRequestError(
+                  `File too large: ${part.filename} exceeds 5MB`,
+                );
+              }
+
+              imageFile = {
+                filename: part.filename,
+                mimetype: part.mimetype,
+                data: buffer,
+              };
+            } else {
+              body[part.fieldname] = part.value;
+            }
+          }
+
+          const payload = {
+            ...body,
+            sortOrder: body.sortOrder ? Number(body.sortOrder) : undefined,
+            isActive:
+              body.isActive === "true"
+                ? true
+                : body.isActive === "false"
+                  ? false
+                  : undefined,
+          };
+
+          const validatedData = CreateBannerSchema.parse(payload);
+          const banner = await bannerService.create({
+            ...validatedData,
+            ...(imageFile ? { imageFile } : {}),
+          });
           return reply.sendCreated(banner);
         },
       });
@@ -62,11 +112,53 @@ const bannerRoutes: FastifyPluginAsync = async (fastify) => {
         schema: {
           tags: ["Admin | Banners"],
           summary: "Update banner",
+          description: "Updates a banner, optionally including a new image.",
           params: IdParamSchema,
-          body: UpdateBannerSchema,
         },
         handler: async (request, reply) => {
-          const banner = await bannerService.update(request.params.id, request.body);
+          const parts = request.parts();
+          const body: any = {};
+          let imageFile: FileUpload | undefined;
+
+          for await (const part of parts) {
+            if (part.type === "file") {
+              if (!ALLOWED_MIMETYPES.includes(part.mimetype)) {
+                throw new BadRequestError(`Invalid file type: ${part.mimetype}`);
+              }
+
+              const buffer = await part.toBuffer();
+              if (buffer.length > MAX_FILE_SIZE) {
+                throw new BadRequestError(
+                  `File too large: ${part.filename} exceeds 5MB`,
+                );
+              }
+
+              imageFile = {
+                filename: part.filename,
+                mimetype: part.mimetype,
+                data: buffer,
+              };
+            } else {
+              body[part.fieldname] = part.value;
+            }
+          }
+
+          const payload = {
+            ...body,
+            sortOrder: body.sortOrder ? Number(body.sortOrder) : undefined,
+            isActive:
+              body.isActive === "true"
+                ? true
+                : body.isActive === "false"
+                  ? false
+                  : undefined,
+          };
+
+          const validatedData = UpdateBannerSchema.parse(payload);
+          const banner = await bannerService.update(request.params.id, {
+            ...validatedData,
+            ...(imageFile ? { imageFile } : {}),
+          });
           return reply.sendOk(banner);
         },
       });

@@ -2,7 +2,8 @@ import { eq, ilike, and, count } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import { brands } from '@/db/schema/brand.js';
 import { NotFoundError } from '@/shared/errors.js';
-import type { CreateBrand, UpdateBrand, BrandParams, AdminBrandParams } from './schema.js';
+import { uploadService } from "@/shared/services/upload.js";
+import type { CreateBrand, UpdateBrand, BrandParams, AdminBrandParams, FileUpload } from './schema.js';
 
 export class BrandService {
     async list(filters: BrandParams = { page: 1, limit: 10 }) {
@@ -68,21 +69,64 @@ export class BrandService {
         return brand;
     }
 
-    async create(data: CreateBrand) {
-        const [brand] = await db.insert(brands).values(data).returning();
-        return brand!;
+    async create(data: CreateBrand & { imageFile?: FileUpload }) {
+        const { imageFile, ...brandData } = data;
+        let logoUrl = brandData.logoUrl;
+
+        try {
+            if (imageFile) {
+                logoUrl = await uploadService.uploadFile(
+                    `brands/${imageFile.filename}`,
+                    imageFile.mimetype,
+                    imageFile.data
+                );
+            }
+
+            const [brand] = await db.insert(brands).values({
+                ...brandData,
+                logoUrl,
+            }).returning();
+            return brand!;
+        } catch (error) {
+            if (logoUrl && imageFile) {
+                const key = logoUrl.split('/').pop();
+                if (key) await uploadService.deleteFile(`brands/${key}`).catch(console.error);
+            }
+            throw error;
+        }
     }
 
-    async update(id: string, data: UpdateBrand) {
+    async update(id: string, data: UpdateBrand & { imageFile?: FileUpload }) {
+        const { imageFile, ...brandData } = data;
+        let logoUrl = brandData.logoUrl;
 
-        const [brand] = await db
-            .update(brands)
-            .set(data)
-            .where(eq(brands.id, id))
-            .returning();
-        
-        if (!brand) throw new NotFoundError('Brand');
-        return brand;
+        try {
+            if (imageFile) {
+                logoUrl = await uploadService.uploadFile(
+                    `brands/${imageFile.filename}`,
+                    imageFile.mimetype,
+                    imageFile.data
+                );
+            }
+
+            const [brand] = await db
+                .update(brands)
+                .set({
+                    ...brandData,
+                    logoUrl,
+                })
+                .where(eq(brands.id, id))
+                .returning();
+            
+            if (!brand) throw new NotFoundError('Brand');
+            return brand;
+        } catch (error) {
+            if (logoUrl && imageFile) {
+                const key = logoUrl.split('/').pop();
+                if (key) await uploadService.deleteFile(`brands/${key}`).catch(console.error);
+            }
+            throw error;
+        }
     }
 
     async delete(id: string) {

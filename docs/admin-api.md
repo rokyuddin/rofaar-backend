@@ -212,122 +212,45 @@ GET /admin/top-products?limit=10
 
 ## 4. Products
 
-Prefix: `/admin/products`.
+### List Products
+`GET /admin/products`
+- **Query Params**:
+  - `page`: number (default: 1)
+  - `limit`: number (default: 10)
+  - `search`: string (optional)
+  - `categoryId`: uuid (optional)
+  - `brandId`: uuid (optional)
+  - `minPrice`: number (optional)
+  - `maxPrice`: number (optional)
+  - `isActive`: boolean (optional)
+  - `sort`: string (newest, price-low, price-high, popular)
 
-| Method | Path | Permission |
-|--------|------|------------|
-| `GET` | `/` | `read` `products` |
-| `POST` | `/create` | `create` `products` |
-| `PUT` | `/update/:id` | `update` `products` |
-| `DELETE` | `/delete/:id` | `delete` `products` |
+### Create Product
+`POST /admin/products`
+- **Content-Type**: `multipart/form-data`
+- **Body**:
+  - `name`: string (required)
+  - `slug`: string (required)
+  - `description`: string (required)
+  - `price`: number (required)
+  - `costPrice`: number (required)
+  - `discountPercentage`: number (0-100)
+  - `stock`: number (required)
+  - `categoryId`: uuid (required)
+  - `brandId`: uuid (required)
+  - `isActive`: boolean (default: true)
+  - `files`: image binary (multiple allowed)
 
-### List products
+### Update Product
+`PUT /admin/products/:id`
+- **Content-Type**: `multipart/form-data`
+- **Body**:
+  - Same as Create Product (all optional)
+  - `images`: JSON string (existing images metadata)
+  - `files`: image binary (new uploads)
 
-```http
-GET /admin/products?page=1&limit=20&search=shirt&isActive=true
-```
-
-Returns a paginated list of products, including inactive items. Query params match the public listing plus `isActive=true|false`.
-
-**Response:** `200` — paginated product list.
-
----
-
-### Create product
-
-```http
-POST /admin/products/create
-```
-
-**Body:**
-
-```json
-{
-  "name": "Cotton T-Shirt",
-  "slug": "cotton-t-shirt",
-  "description": "Soft cotton tee",
-  "price": 899,
-  "stock": 50,
-  "isActive": true,
-  "categoryId": "uuid",
-  "brandId": "uuid",
-  "images": [
-    { "url": "https://cdn.example.com/shirt.jpg", "sortOrder": 0 }
-  ]
-}
-```
-
-**Response:** `201`
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "name": "Cotton T-Shirt",
-    "slug": "cotton-t-shirt",
-    "description": "Soft cotton tee",
-    "price": "899.00",
-    "stock": 50,
-    "isActive": true,
-    "categoryId": "uuid",
-    "brandId": "uuid",
-    "images": [
-      { "url": "https://cdn.example.com/shirt.jpg", "sortOrder": 0 }
-    ],
-    "createdAt": "2024-01-01T00:00:00.000Z"
-  }
-}
-```
-
----
-
-### Update product
-
-```http
-PUT /admin/products/update/:id
-```
-
-`:id` = Product UUID.
-
-**Body:** (Partial update allowed)
-
-```json
-{
-  "price": 999,
-  "stock": 100
-}
-```
-
-**Response:** `200`
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "name": "Cotton T-Shirt",
-    "slug": "cotton-t-shirt",
-    "price": "999.00",
-    "stock": 100,
-    "isActive": true
-    /* ... other fields */
-  }
-}
-```
-
----
-
-### Delete product
-
-```http
-DELETE /admin/products/delete/:id
-```
-
-**Response:** `200`
-```json
-{ "success": true, "message": "Product deleted successfully" }
-```
+### Delete Product
+`DELETE /admin/products/:id`
 
 ---
 
@@ -335,291 +258,107 @@ DELETE /admin/products/delete/:id
 
 ### Categories
 
-Prefix: `/admin/categories`.
+#### List Categories
+`GET /admin/categories`
+- **Query Params**: `page`, `limit`, `search`, `isActive`
 
-| Method | Path | Permission |
-|--------|------|------------|
-| `GET` | `/` | `read` `categories` |
-| `POST` | `/create` | `create` `categories` |
-| `PUT` | `/update/:id` | `update` `categories` |
-| `DELETE` | `/delete/:id` | `delete` `categories` |
+#### Create Category
+`POST /admin/categories`
+- **Content-Type**: `multipart/form-data`
+- **Body**:
+  - `name`: string (required)
+  - `slug`: string (required)
+  - `description`: string (optional)
+  - `isActive`: boolean (default: true)
+  - `imageFile`: image binary (optional)
 
-### List categories
+#### Update Category
+`PUT /admin/categories/:id`
+- **Content-Type**: `multipart/form-data`
+- **Body**: Same as Create (optional)
 
-```http
-GET /admin/categories
-```
-
-**Response:** `200` — array of categories.
-
----
-
-### Create category
-
-```http
-POST /admin/categories/create
-```
-
-**Body:**
-
-```json
-{
-  "name": "Men's Wear",
-  "slug": "mens-wear",
-  "description": "Clothing for men",
-  "imageUrl": "https://cdn.example.com/cat.jpg"
-}
-```
-
-**Response:** `201`
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "name": "Men's Wear",
-    "slug": "mens-wear",
-    "description": "Clothing for men",
-    "imageUrl": "https://cdn.example.com/cat.jpg",
-    "createdAt": "2024-01-01T00:00:00.000Z"
-  }
-}
-```
-
----
-
-### Update category
-
-```http
-PUT /admin/categories/update/:id
-```
-
-`:id` = Category UUID.
-
-**Body:** Partial category fields.
-
-```json
-{
-  "name": "Men's Clothing"
-}
-```
-
-**Response:** `200`
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "name": "Men's Clothing",
-    "slug": "mens-wear",
-    "description": "Clothing for men",
-    "imageUrl": "https://cdn.example.com/cat.jpg",
-    "createdAt": "2024-01-01T00:00:00.000Z"
-  }
-}
-```
-
----
-
-### Delete category
-
-```http
-DELETE /admin/categories/delete/:id
-```
-
-**Response:** `200`
-
-```json
-{ "success": true, "message": "Category deleted successfully" }
-```
-
-Public read remains: `GET /categories`, `GET /categories/:slug`.
+#### Delete Category
+`DELETE /admin/categories/:id`
 
 ---
 
 ### Brands
 
-Prefix: `/admin/brands`.
+#### List Brands
+`GET /admin/brands`
+- **Query Params**: `page`, `limit`, `search`, `isActive`
 
-| Method | Path | Permission |
-|--------|------|------------|
-| `GET` | `/` | `read` `brands` |
-| `POST` | `/create` | `create` `brands` |
-| `PUT` | `/update/:id` | `update` `brands` |
-| `DELETE` | `/delete/:id` | `delete` `brands` |
+#### Create Brand
+`POST /admin/brands`
+- **Content-Type**: `multipart/form-data`
+- **Body**:
+  - `name`: string (required)
+  - `slug`: string (required)
+  - `description`: string (optional)
+  - `isActive`: boolean (default: true)
+  - `imageFile`: image binary (optional)
 
-### List brands
+#### Update Brand
+`PUT /admin/brands/:id`
+- **Content-Type**: `multipart/form-data`
+- **Body**: Same as Create (optional)
 
-```http
-GET /admin/brands
-```
-
-**Response:** `200` — array of brands.
-
----
-
-### Create brand
-
-```http
-POST /admin/brands/create
-```
-
-**Body:**
-
-```json
-{
-  "name": "Rofaar Basics",
-  "slug": "rofaar-basics",
-  "description": "House brand",
-  "logoUrl": "https://cdn.example.com/logo.png"
-}
-```
-
-**Response:** `201`
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "name": "Rofaar Basics",
-    "slug": "rofaar-basics",
-    "description": "House brand",
-    "logoUrl": "https://cdn.example.com/logo.png",
-    "createdAt": "2024-01-01T00:00:00.000Z"
-  }
-}
-```
-
----
-
-### Update brand
-
-```http
-PUT /admin/brands/update/:id
-```
-
-`:id` = Brand UUID.
-
-**Body:** Partial brand fields.
-
-```json
-{
-  "description": "Updated house brand"
-}
-```
-
-**Response:** `200`
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "name": "Rofaar Basics",
-    "slug": "rofaar-basics",
-    "description": "Updated house brand",
-    "logoUrl": "https://cdn.example.com/logo.png",
-    "createdAt": "2024-01-01T00:00:00.000Z"
-  }
-}
-```
-
----
-
-### Delete brand
-
-```http
-DELETE /admin/brands/delete/:id
-```
-
-**Response:** `200`
-
-```json
-{ "success": true, "message": "Brand deleted successfully" }
-```
+#### Delete Brand
+`DELETE /admin/brands/:id`
 
 ---
 
 ## 6. Marketing (banners & ads)
 
-### Banners — `/admin/banners`
+### Banners
 
-| Method | Path | Permission |
-|--------|------|------------|
-| `GET` | `/` | `read` `banners` |
-| `POST` | `/` | `create` `banners` |
-| `PUT` | `/:id` | `update` `banners` |
-| `DELETE` | `/:id` | `delete` `banners` |
+#### List Banners
+`GET /admin/banners`
+- **Response**: All banners including inactive ones.
 
-**Create body:**
+#### Create Banner
+`POST /admin/banners`
+- **Content-Type**: `multipart/form-data`
+- **Body**:
+  - `title`: string (optional)
+  - `link`: string (optional)
+  - `sortOrder`: number (optional)
+  - `isActive`: boolean (default: true)
+  - `imageFile`: image binary (optional)
 
-```json
-{
-  "title": "Summer Sale",
-  "subtitle": "Up to 50% off",
-  "imageUrl": "https://cdn.example.com/banner.jpg",
-  "linkUrl": "https://rofaar.com/sale",
-  "isActive": true,
-  "sortOrder": 0
-}
-```
+#### Update Banner
+`PUT /admin/banners/:id`
+- **Content-Type**: `multipart/form-data`
+- **Body**: Same as Create (optional)
 
-**Response (Create/Update):** `200` or `201`
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "title": "Summer Sale",
-    "subtitle": "Up to 50% off",
-    "imageUrl": "https://cdn.example.com/banner.jpg",
-    "linkUrl": "https://rofaar.com/sale",
-    "isActive": true,
-    "sortOrder": 0
-  }
-}
-```
+#### Delete Banner
+`DELETE /admin/banners/:id`
 
 ---
 
-### Advertisements — `/admin/advertisements`
+### Advertisements
 
-| Method | Path | Permission |
-|--------|------|------------|
-| `GET` | `/` | `read` `advertisements` |
-| `POST` | `/` | `create` `advertisements` |
-| `PUT` | `/:id` | `update` `advertisements` |
-| `DELETE` | `/:id` | `delete` `advertisements` |
+#### List Advertisements
+`GET /admin/advertisements/all`
+- **Response**: All advertisements including inactive ones.
 
-**Create body:**
+#### Create Advertisement
+`POST /admin/advertisements`
+- **Content-Type**: `multipart/form-data`
+- **Body**:
+  - `title`: string (optional)
+  - `link`: string (optional)
+  - `position`: string (optional)
+  - `isActive`: boolean (default: true)
+  - `imageFile`: image binary (optional)
 
-```json
-{
-  "title": "Hero Promo",
-  "imageUrl": "https://cdn.example.com/ad.jpg",
-  "linkUrl": "https://rofaar.com/promo",
-  "position": "homepage",
-  "isActive": true
-}
-```
+#### Update Advertisement
+`PUT /admin/advertisements/:id`
+- **Content-Type**: `multipart/form-data`
+- **Body**: Same as Create (optional)
 
-**Response (Create/Update):** `200` or `201`
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "title": "Hero Promo",
-    "imageUrl": "https://cdn.example.com/ad.jpg",
-    "linkUrl": "https://rofaar.com/promo",
-    "position": "homepage",
-    "isActive": true
-  }
-}
-```
+#### Delete Advertisement
+`DELETE /admin/advertisements/:id`
 
 ---
 

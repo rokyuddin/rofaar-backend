@@ -33,3 +33,9 @@ export type CreateBrand = z.infer<typeof CreateBrandSchema>;
 export type UpdateBrand = z.infer<typeof UpdateBrandSchema>;
 export type BrandParams = z.infer<typeof BrandParamsSchema>;
 export type AdminBrandParams = z.infer<typeof AdminBrandParamsSchema>;
+
+export interface FileUpload {
+  filename: string;
+  mimetype: string;
+  data: Buffer;
+}

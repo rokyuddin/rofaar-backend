@@ -91,8 +91,8 @@ describe('ProductService', () => {
 
       await expect(productService.create(data)).rejects.toThrow('DB Fail');
 
-      // Verify cleanup was called
-      expect(uploadService.deleteFile).toHaveBeenCalledWith('test.jpg');
+      // Verify cleanup was called with folder prefix
+      expect(uploadService.deleteFile).toHaveBeenCalledWith('products/test.jpg');
     });
   });
 });

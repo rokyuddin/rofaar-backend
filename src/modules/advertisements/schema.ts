@@ -18,3 +18,12 @@ export const CreateAdvertisementSchema = z.object({
 });
 
 export const UpdateAdvertisementSchema = CreateAdvertisementSchema.partial();
+
+export type CreateAdvertisement = z.infer<typeof CreateAdvertisementSchema>;
+export type UpdateAdvertisement = z.infer<typeof UpdateAdvertisementSchema>;
+
+export interface FileUpload {
+  filename: string;
+  mimetype: string;
+  data: Buffer;
+}

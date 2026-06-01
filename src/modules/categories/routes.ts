@@ -6,8 +6,13 @@ import {
   UpdateCategorySchema,
   CategoryParamsSchema,
   AdminCategoryParamsSchema,
+  type FileUpload,
 } from "./schema.js";
 import { IdParamSchema, SlugParamSchema } from "@/shared/types.js";
+import { BadRequestError } from "@/shared/errors.js";
+
+const ALLOWED_MIMETYPES = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB for categories
 
 const categoryRoutes: FastifyPluginAsync = async (fastify) => {
   // ─── Public Routes ─────────────────────────────────────────────────────────
@@ -77,10 +82,51 @@ const categoryRoutes: FastifyPluginAsync = async (fastify) => {
         schema: {
           tags: ["Admin | Categories"],
           summary: "Create category",
-          body: CreateCategorySchema,
+          description: "Creates a new category with an optional image.",
         },
         handler: async (request, reply) => {
-          const category = await categoryService.create(request.body);
+          const parts = request.parts();
+          const body: any = {};
+          let imageFile: FileUpload | undefined;
+
+          for await (const part of parts) {
+            if (part.type === "file") {
+              if (!ALLOWED_MIMETYPES.includes(part.mimetype)) {
+                throw new BadRequestError(`Invalid file type: ${part.mimetype}`);
+              }
+
+              const buffer = await part.toBuffer();
+              if (buffer.length > MAX_FILE_SIZE) {
+                throw new BadRequestError(
+                  `File too large: ${part.filename} exceeds 2MB`,
+                );
+              }
+
+              imageFile = {
+                filename: part.filename,
+                mimetype: part.mimetype,
+                data: buffer,
+              };
+            } else {
+              body[part.fieldname] = part.value;
+            }
+          }
+
+          const payload = {
+            ...body,
+            isActive:
+              body.isActive === "true"
+                ? true
+                : body.isActive === "false"
+                  ? false
+                  : undefined,
+          };
+
+          const validatedData = CreateCategorySchema.parse(payload);
+          const category = await categoryService.create({
+            ...validatedData,
+            ...(imageFile ? { imageFile } : {}),
+          });
           return reply.sendCreated(category);
         },
       });
@@ -90,14 +136,52 @@ const categoryRoutes: FastifyPluginAsync = async (fastify) => {
         schema: {
           tags: ["Admin | Categories"],
           summary: "Update category",
+          description: "Updates a category, optionally including a new image.",
           params: IdParamSchema,
-          body: UpdateCategorySchema,
         },
         handler: async (request, reply) => {
-          const category = await categoryService.update(
-            request.params.id,
-            request.body,
-          );
+          const parts = request.parts();
+          const body: any = {};
+          let imageFile: FileUpload | undefined;
+
+          for await (const part of parts) {
+            if (part.type === "file") {
+              if (!ALLOWED_MIMETYPES.includes(part.mimetype)) {
+                throw new BadRequestError(`Invalid file type: ${part.mimetype}`);
+              }
+
+              const buffer = await part.toBuffer();
+              if (buffer.length > MAX_FILE_SIZE) {
+                throw new BadRequestError(
+                  `File too large: ${part.filename} exceeds 2MB`,
+                );
+              }
+
+              imageFile = {
+                filename: part.filename,
+                mimetype: part.mimetype,
+                data: buffer,
+              };
+            } else {
+              body[part.fieldname] = part.value;
+            }
+          }
+
+          const payload = {
+            ...body,
+            isActive:
+              body.isActive === "true"
+                ? true
+                : body.isActive === "false"
+                  ? false
+                  : undefined,
+          };
+
+          const validatedData = UpdateCategorySchema.parse(payload);
+          const category = await categoryService.update(request.params.id, {
+            ...validatedData,
+            ...(imageFile ? { imageFile } : {}),
+          });
           return reply.sendOk(category);
         },
       });

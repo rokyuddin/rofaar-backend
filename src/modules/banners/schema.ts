@@ -20,3 +20,12 @@ export const CreateBannerSchema = z.object({
 });
 
 export const UpdateBannerSchema = CreateBannerSchema.partial();
+
+export type CreateBanner = z.infer<typeof CreateBannerSchema>;
+export type UpdateBanner = z.infer<typeof UpdateBannerSchema>;
+
+export interface FileUpload {
+  filename: string;
+  mimetype: string;
+  data: Buffer;
+}

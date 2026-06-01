@@ -1,9 +1,17 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { advertisementService } from './service.js';
-import { CreateAdvertisementSchema, UpdateAdvertisementSchema } from './schema.js';
+import {
+  CreateAdvertisementSchema,
+  UpdateAdvertisementSchema,
+  type FileUpload,
+} from './schema.js';
 import { IdParamSchema } from '@/shared/types.js';
+import { BadRequestError } from '@/shared/errors.js';
 import { z } from 'zod';
+
+const ALLOWED_MIMETYPES = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB for advertisements
 
 const advertisementRoutes: FastifyPluginAsync = async (fastify) => {
   // ─── Public Routes ─────────────────────────────────────────────────────────
@@ -51,10 +59,51 @@ const advertisementRoutes: FastifyPluginAsync = async (fastify) => {
         schema: {
           tags: ["Admin | Ads"],
           summary: "Create advertisement",
-          body: CreateAdvertisementSchema,
+          description: "Creates a new advertisement with an optional image.",
         },
         handler: async (request, reply) => {
-          const ad = await advertisementService.create(request.body);
+          const parts = request.parts();
+          const body: any = {};
+          let imageFile: FileUpload | undefined;
+
+          for await (const part of parts) {
+            if (part.type === "file") {
+              if (!ALLOWED_MIMETYPES.includes(part.mimetype)) {
+                throw new BadRequestError(`Invalid file type: ${part.mimetype}`);
+              }
+
+              const buffer = await part.toBuffer();
+              if (buffer.length > MAX_FILE_SIZE) {
+                throw new BadRequestError(
+                  `File too large: ${part.filename} exceeds 5MB`,
+                );
+              }
+
+              imageFile = {
+                filename: part.filename,
+                mimetype: part.mimetype,
+                data: buffer,
+              };
+            } else {
+              body[part.fieldname] = part.value;
+            }
+          }
+
+          const payload = {
+            ...body,
+            isActive:
+              body.isActive === "true"
+                ? true
+                : body.isActive === "false"
+                  ? false
+                  : undefined,
+          };
+
+          const validatedData = CreateAdvertisementSchema.parse(payload);
+          const ad = await advertisementService.create({
+            ...validatedData,
+            ...(imageFile ? { imageFile } : {}),
+          });
           return reply.sendCreated(ad);
         },
       });
@@ -64,14 +113,53 @@ const advertisementRoutes: FastifyPluginAsync = async (fastify) => {
         schema: {
           tags: ["Admin | Ads"],
           summary: "Update advertisement",
+          description:
+            "Updates an advertisement, optionally including a new image.",
           params: IdParamSchema,
-          body: UpdateAdvertisementSchema,
         },
         handler: async (request, reply) => {
-          const ad = await advertisementService.update(
-            request.params.id,
-            request.body,
-          );
+          const parts = request.parts();
+          const body: any = {};
+          let imageFile: FileUpload | undefined;
+
+          for await (const part of parts) {
+            if (part.type === "file") {
+              if (!ALLOWED_MIMETYPES.includes(part.mimetype)) {
+                throw new BadRequestError(`Invalid file type: ${part.mimetype}`);
+              }
+
+              const buffer = await part.toBuffer();
+              if (buffer.length > MAX_FILE_SIZE) {
+                throw new BadRequestError(
+                  `File too large: ${part.filename} exceeds 5MB`,
+                );
+              }
+
+              imageFile = {
+                filename: part.filename,
+                mimetype: part.mimetype,
+                data: buffer,
+              };
+            } else {
+              body[part.fieldname] = part.value;
+            }
+          }
+
+          const payload = {
+            ...body,
+            isActive:
+              body.isActive === "true"
+                ? true
+                : body.isActive === "false"
+                  ? false
+                  : undefined,
+          };
+
+          const validatedData = UpdateAdvertisementSchema.parse(payload);
+          const ad = await advertisementService.update(request.params.id, {
+            ...validatedData,
+            ...(imageFile ? { imageFile } : {}),
+          });
           return reply.sendOk(ad);
         },
       });

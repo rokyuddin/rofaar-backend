@@ -35,3 +35,9 @@ export type CreateCategory = z.infer<typeof CreateCategorySchema>;
 export type UpdateCategory = z.infer<typeof UpdateCategorySchema>;
 export type CategoryParams = z.infer<typeof CategoryParamsSchema>;
 export type AdminCategoryParams = z.infer<typeof AdminCategoryParamsSchema>;
+
+export interface FileUpload {
+  filename: string;
+  mimetype: string;
+  data: Buffer;
+}

@@ -2,6 +2,8 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import { advertisements } from '@/db/schema/marketing.js';
 import { NotFoundError } from '@/shared/errors.js';
+import { uploadService } from "@/shared/services/upload.js";
+import type { CreateAdvertisement, UpdateAdvertisement, FileUpload } from './schema.js';
 
 export class AdvertisementService {
     async list(filters: { position?: string | undefined; onlyActive?: boolean | undefined } = {}) {
@@ -15,20 +17,65 @@ export class AdvertisementService {
         });
     }
 
-    async create(data: any) {
-        const [ad] = await db.insert(advertisements).values(data).returning();
-        return ad!;
+    async create(data: CreateAdvertisement & { imageFile?: FileUpload }) {
+        const { imageFile, ...adData } = data;
+        let imageUrl = adData.imageUrl;
+
+        try {
+            if (imageFile) {
+                imageUrl = await uploadService.uploadFile(
+                    `advertisements/${imageFile.filename}`,
+                    imageFile.mimetype,
+                    imageFile.data
+                );
+            }
+
+            const [ad] = await db.insert(advertisements).values({
+                ...adData,
+                imageUrl,
+            }).returning();
+            return ad!;
+        } catch (error) {
+            if (imageUrl && imageFile) {
+                const key = imageUrl.split('/').pop();
+                if (key) await uploadService.deleteFile(`advertisements/${key}`).catch(console.error);
+            }
+            throw error;
+        }
     }
 
-    async update(id: string, data: any) {
-        const [ad] = await db
-            .update(advertisements)
-            .set({ ...data, updatedAt: new Date() })
-            .where(eq(advertisements.id, id))
-            .returning();
-        
-        if (!ad) throw new NotFoundError('Advertisement');
-        return ad;
+    async update(id: string, data: UpdateAdvertisement & { imageFile?: FileUpload }) {
+        const { imageFile, ...adData } = data;
+        let imageUrl = adData.imageUrl;
+
+        try {
+            if (imageFile) {
+                imageUrl = await uploadService.uploadFile(
+                    `advertisements/${imageFile.filename}`,
+                    imageFile.mimetype,
+                    imageFile.data
+                );
+            }
+
+            const [ad] = await db
+                .update(advertisements)
+                .set({ 
+                    ...adData, 
+                    imageUrl,
+                    updatedAt: new Date() 
+                })
+                .where(eq(advertisements.id, id))
+                .returning();
+            
+            if (!ad) throw new NotFoundError('Advertisement');
+            return ad;
+        } catch (error) {
+            if (imageUrl && imageFile) {
+                const key = imageUrl.split('/').pop();
+                if (key) await uploadService.deleteFile(`advertisements/${key}`).catch(console.error);
+            }
+            throw error;
+        }
     }
 
     async delete(id: string) {

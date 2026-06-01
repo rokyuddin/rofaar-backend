@@ -171,7 +171,7 @@ export class ProductService {
       if (imageFiles && imageFiles.length > 0) {
         for (const file of imageFiles) {
           const url = await uploadService.uploadFile(
-            file.filename,
+            `products/${file.filename}`,
             file.mimetype,
             file.data,
           );
@@ -228,7 +228,7 @@ export class ProductService {
     } catch (error) {
       for (const url of uploadedUrls) {
         const key = url.split("/").pop();
-        if (key) await uploadService.deleteFile(key).catch(console.error);
+        if (key) await uploadService.deleteFile(`products/${key}`).catch(console.error);
       }
       throw error;
     }
@@ -242,7 +242,7 @@ export class ProductService {
       if (imageFiles && imageFiles.length > 0) {
         for (const file of imageFiles) {
           const url = await uploadService.uploadFile(
-            file.filename,
+            `products/${file.filename}`,
             file.mimetype,
             file.data,
           );
@@ -304,7 +304,7 @@ export class ProductService {
     } catch (error) {
       for (const url of uploadedUrls) {
         const key = url.split("/").pop();
-        if (key) await uploadService.deleteFile(key).catch(console.error);
+        if (key) await uploadService.deleteFile(`products/${key}`).catch(console.error);
       }
       throw error;
     }
