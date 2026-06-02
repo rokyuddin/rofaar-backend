@@ -19,26 +19,26 @@ const uploadRoutes: FastifyPluginAsync = async (fastify) => {
         },
         handler: async (request, reply) => {
           const parts = request.parts();
-          const files: Buffer[] = [];
+          let fileBuffer: Buffer | undefined;
           let filename = "";
           let mimetype = "";
 
           for await (const part of parts) {
-            if (part.file) {
+            if (part.type === "file") {
               filename = part.filename;
               mimetype = part.mimetype;
-              files.push(part.file);
+              fileBuffer = await part.toBuffer();
             }
           }
 
-          if (files.length === 0) {
+          if (!fileBuffer) {
             return reply.code(400).send({
               success: false,
               message: "No file uploaded",
             });
           }
 
-          const url = await uploadService.uploadFile(filename, mimetype, files[0]);
+          const url = await uploadService.uploadFile(filename, mimetype, fileBuffer);
           return reply.sendCreated({ url });
         },
       });
