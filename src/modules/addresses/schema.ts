@@ -14,14 +14,44 @@ export const AddressSchema = z.object({
 });
 
 export const CreateAddressSchema = z.object({
-    label: z.string().min(1).default('Home'),
-    recipientName: z.string().min(1),
-    phone: z.string().min(1),
-    altPhone: z.string().optional(),
-    address: z.string().min(1),
-    city: z.string().min(1),
-    area: z.string().min(1),
-    zone: z.string().optional(),
+    label: z
+        .string()
+        .min(1, { message: 'Label is required' })
+        .max(50, { message: 'Label must be 50 characters or less' })
+        .default('Home'),
+    recipientName: z
+        .string()
+        .min(1, { message: 'Recipient name is required' })
+        .max(255, { message: 'Recipient name must be 255 characters or less' }),
+    phone: z
+        .string()
+        .min(1, { message: 'Phone number is required' })
+        .regex(/^\d+$/, { message: 'Phone number must contain only digits' })
+        .regex(/^01/, { message: 'Phone number must start with 01' })
+        .length(11, { message: 'Phone number must be exactly 11 digits' }),
+    altPhone: z
+        .string()
+        .regex(/^\d*$/, { message: 'Phone number must contain only digits' })
+        .regex(/^01/, { message: 'Phone number must start with 01' })
+        .length(11, { message: 'Phone number must be exactly 11 digits' })
+        .optional()
+        .or(z.literal('')),
+    address: z
+        .string()
+        .min(1, { message: 'Address is required' })
+        .max(500, { message: 'Address must be 500 characters or less' }),
+    city: z
+        .string()
+        .min(1, { message: 'City is required' })
+        .max(100, { message: 'City must be 100 characters or less' }),
+    area: z
+        .string()
+        .min(1, { message: 'Area is required' })
+        .max(100, { message: 'Area must be 100 characters or less' }),
+    zone: z
+        .string()
+        .max(100, { message: 'Zone must be 100 characters or less' })
+        .optional(),
     isDefault: z.boolean().default(false),
 });
 
