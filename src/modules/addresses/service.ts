@@ -18,10 +18,12 @@ export class AddressService {
 
     async create(userId: string, data: CreateAddressInput) {
         return await db.transaction(async (tx) => {
-            const [{ cnt }] = await tx
+            const [result] = await tx
                 .select({ cnt: count() })
                 .from(addresses)
                 .where(eq(addresses.userId, userId));
+
+            const cnt = result?.cnt ?? 0;
 
             const isFirstAddress = cnt === 0;
             const isDefault = isFirstAddress ? true : data.isDefault;
