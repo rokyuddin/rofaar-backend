@@ -71,6 +71,7 @@ export const orders = pgTable('orders', {
     shippingFee: numeric('shipping_fee', { precision: 10, scale: 2 }).notNull().default('0'),
     trackingNumber: varchar('tracking_number', { length: 255 }),
     trackingUrl: varchar('tracking_url', { length: 500 }),
+    consignmentId: integer('consignment_id'), // Steadfast Courier consignment ID
     shippedAt: timestamp('shipped_at', { withTimezone: true }),
     deliveredAt: timestamp('delivered_at', { withTimezone: true }),
 

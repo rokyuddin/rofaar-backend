@@ -15,6 +15,13 @@
       "when": 1780375804015,
       "tag": "0001_gorgeous_zaladane",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780377623347,
+      "tag": "0002_lame_calypso",
+      "breakpoints": true
     }
   ]
 }

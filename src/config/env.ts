@@ -13,6 +13,13 @@ const envSchema = z.object({
     R2_SECRET_ACCESS_KEY: z.string().optional(),
     R2_BUCKET_NAME: z.string().optional(),
     R2_PUBLIC_URL: z.string().url().optional(),
+
+    // Steadfast Courier
+    STEADFAST_API_KEY: z.string().optional(),
+    STEADFAST_SECRET_KEY: z.string().optional(),
+    STEADFAST_BASE_URL: z.string().url().default('https://portal.packzy.com/api/v1'),
+    STEADFAST_WEBHOOK_TOKEN: z.string().optional(),
+    STEADFAST_CALLBACK_URL: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -10,6 +10,10 @@ import {
     CancelOrderSchema,
 } from './schema.js';
 import { IdParamSchema } from '@/shared/types.js';
+import { steadfastClient } from '@/modules/steadfast/service.js';
+import { eq } from 'drizzle-orm';
+import { db } from '@/config/db.js';
+import { orders } from '@/db/schema/order.js';
 
 const orderRoutes: FastifyPluginAsync = async (fastify) => {
     // ─── Customer Routes ─────────────────────────────────────────────────────
@@ -200,12 +204,52 @@ const orderRoutes: FastifyPluginAsync = async (fastify) => {
             schema: {
                 tags: ['Admin | Orders'],
                 summary: 'Ship order',
-                description: 'Shortcut to set order status to shipped and add tracking info.',
+                description: 'Shortcut to set order status to shipped and add tracking info. If no tracking info provided, auto-pushes to Steadfast Courier.',
                 params: IdParamSchema,
                 body: ShipOrderSchema
             },
             handler: async (request, reply) => {
-                const result = await orderService.ship(request.params.id, request.body);
+                const orderId = request.params.id;
+                const result = await orderService.ship(orderId, request.body);
+
+                // Auto-push to Steadfast if no manual tracking info was provided
+                if (!request.body.trackingNumber && steadfastClient.isConfigured) {
+                    try {
+                        const order = await orderService.adminGetById(orderId);
+                        if (order.address) {
+                            const invoice = `${orderId}`;
+                            const codAmount = order.paymentMethod === 'cod' ? Number(order.total) : 0;
+
+                            const steadfastResult = await steadfastClient.createOrder({
+                                invoice,
+                                recipient_name: order.address.recipientName ?? 'N/A',
+                                recipient_phone: order.address.phone,
+                                alternative_phone: order.address.altPhone ?? undefined,
+                                recipient_address: [
+                                    order.address.address,
+                                    order.address.area,
+                                    order.address.city,
+                                ].filter(Boolean).join(', '),
+                                cod_amount: codAmount,
+                                note: `Order ${orderId}`,
+                            });
+
+                            if (steadfastResult.consignment) {
+                                await db.update(orders)
+                                    .set({
+                                        consignmentId: steadfastResult.consignment.consignment_id,
+                                        trackingNumber: steadfastResult.consignment.tracking_code,
+                                        trackingUrl: `https://steadfast.com.bd/tracking/${steadfastResult.consignment.tracking_code}`,
+                                        updatedAt: new Date(),
+                                    })
+                                    .where(eq(orders.id, orderId));
+                            }
+                        }
+                    } catch (error) {
+                        request.log.warn({ error, orderId }, 'Failed to auto-push order to Steadfast Courier');
+                    }
+                }
+
                 return reply.sendOk(result, 'Order shipped');
             },
         });
