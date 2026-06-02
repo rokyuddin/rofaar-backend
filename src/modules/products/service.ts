@@ -380,6 +380,54 @@ export class ProductService {
     });
   }
 
+  // ─── Image Upload ─────────────────────────────────────────────────────────
+
+  async uploadImages(productId: string, imageFiles: FileUpload[]) {
+    const product = await db.query.products.findFirst({
+      where: eq(products.id, productId),
+      with: {
+        images: { orderBy: (i, { asc }) => [asc(i.sortOrder)] },
+      },
+    });
+    if (!product) throw new NotFoundError("Product");
+
+    const uploadedUrls: string[] = [];
+    try {
+      for (const file of imageFiles) {
+        const url = await uploadService.uploadFile(
+          `products/${file.filename}`,
+          file.mimetype,
+          file.data,
+        );
+        uploadedUrls.push(url);
+      }
+
+      const nextSortOrder = product.images.length > 0
+        ? product.images[product.images.length - 1]!.sortOrder + 1
+        : 0;
+
+      const newImageRows = uploadedUrls.map((url, i) => ({
+        productId,
+        url,
+        sortOrder: nextSortOrder + i,
+      }));
+
+      await db.insert(productImages).values(newImageRows);
+
+      const updated = await db.query.productImages.findMany({
+        where: eq(productImages.productId, productId),
+        orderBy: (i, { asc }) => [asc(i.sortOrder)],
+      });
+      return updated;
+    } catch (error) {
+      for (const url of uploadedUrls) {
+        const key = url.split("/").pop();
+        if (key) await uploadService.deleteFile(`products/${key}`).catch(console.error);
+      }
+      throw error;
+    }
+  }
+
   // ─── Bulk Import ────────────────────────────────────────────────────────────
 
   async bulkImport(

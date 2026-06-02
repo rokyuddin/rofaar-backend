@@ -355,6 +355,53 @@ const productRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
+      app.post("/:id/images", {
+        preHandler: [fastify.requirePermission("update", "products")],
+        schema: {
+          tags: ["Admin | Products"],
+          summary: "Upload product images",
+          description:
+            "Uploads one or more images for an existing product. Accepts multipart/form-data with one or more file fields. Images are appended to the existing image set.",
+          params: IdParamSchema,
+          consumes: ["multipart/form-data"],
+        },
+        handler: async (request, reply) => {
+          const parts = request.parts();
+          const imageFiles: FileUpload[] = [];
+
+          for await (const part of parts) {
+            if (part.type === "file") {
+              if (!ALLOWED_MIMETYPES.includes(part.mimetype)) {
+                throw new BadRequestError(`Invalid file type: ${part.mimetype}`);
+              }
+              const buffer = await part.toBuffer();
+              if (buffer.length > MAX_FILE_SIZE) {
+                throw new BadRequestError(
+                  `File too large: ${part.filename} exceeds 5MB`,
+                );
+              }
+              imageFiles.push({
+                filename: part.filename,
+                mimetype: part.mimetype,
+                data: buffer,
+              });
+            }
+          }
+
+          if (imageFiles.length === 0) {
+            throw new BadRequestError(
+              "No image files uploaded. Send at least one file field.",
+            );
+          }
+
+          const images = await productService.uploadImages(
+            request.params.id,
+            imageFiles,
+          );
+          return reply.sendCreated(images);
+        },
+      });
+
       app.delete("/:id", {
         preHandler: [fastify.requirePermission("delete", "products")],
         schema: {

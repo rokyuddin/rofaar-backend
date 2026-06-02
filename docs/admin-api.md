@@ -371,6 +371,30 @@ Changes the display order of a product's images. The `sortOrder` is 0-based. All
 }
 ```
 
+### Upload Product Images
+
+```http
+POST /admin/products/:id/images
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+
+file=@image1.jpg   (one or more file fields)
+```
+
+Uploads one or more images to an existing product. Images are appended to the current set with auto-incrementing sort order. Accepted types: `image/jpeg`, `image/png`, `image/webp`. Max file size: 5MB per image.
+
+**Success Response (201):**
+
+```json
+{
+  "success": true,
+  "data": [
+    { "id": "uuid", "productId": "uuid", "url": "https://r2.dev/...", "sortOrder": 3 },
+    { "id": "uuid", "productId": "uuid", "url": "https://r2.dev/...", "sortOrder": 4 }
+  ]
+}
+```
+
 ### Bulk Import Products
 
 ```http
@@ -1849,7 +1873,8 @@ Single file upload to Cloudflare R2.
 | 14 | Products | DELETE | `/admin/products/:id` |
 | 14a | Products | POST | `/admin/products/bulk-import` |
 | 14b | Products | GET | `/admin/products/bulk-import/template` |
-| 14c | Products | PUT | `/admin/products/:id/images/sort` |
+| 14c | Products | POST | `/admin/products/:id/images` |
+| 14d | Products | PUT | `/admin/products/:id/images/sort` |
 | 15 | Categories | GET | `/admin/categories` |
 | 16 | Categories | POST | `/admin/categories` |
 | 17 | Categories | PUT | `/admin/categories/:id` |
