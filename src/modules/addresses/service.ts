@@ -1,7 +1,12 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, count } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import { addresses } from '@/db/schema/address.js';
 import { NotFoundError } from '@/shared/errors.js';
+import { CreateAddressSchema, UpdateAddressSchema } from './schema.js';
+import { z } from 'zod';
+
+type CreateAddressInput = z.infer<typeof CreateAddressSchema>;
+type UpdateAddressInput = z.infer<typeof UpdateAddressSchema>;
 
 export class AddressService {
     async list(userId: string) {
@@ -11,10 +16,17 @@ export class AddressService {
         });
     }
 
-    async create(userId: string, data: any) {
+    async create(userId: string, data: CreateAddressInput) {
         return await db.transaction(async (tx) => {
-            // If setting as default, unset other defaults
-            if (data.isDefault) {
+            const [{ cnt }] = await tx
+                .select({ cnt: count() })
+                .from(addresses)
+                .where(eq(addresses.userId, userId));
+
+            const isFirstAddress = cnt === 0;
+            const isDefault = isFirstAddress ? true : data.isDefault;
+
+            if (isDefault) {
                 await tx
                     .update(addresses)
                     .set({ isDefault: false })
@@ -23,14 +35,14 @@ export class AddressService {
 
             const [address] = await tx
                 .insert(addresses)
-                .values({ ...data, userId })
+                .values({ ...data, isDefault, userId })
                 .returning();
             
             return address!;
         });
     }
 
-    async update(userId: string, id: string, data: any) {
+    async update(userId: string, id: string, data: UpdateAddressInput) {
         return await db.transaction(async (tx) => {
             if (data.isDefault) {
                 await tx

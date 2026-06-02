@@ -5,10 +5,11 @@ export const AddressSchema = z.object({
     label: z.string(),
     recipientName: z.string(),
     phone: z.string(),
-    addressLine: z.string(),
+    altPhone: z.string().nullable().optional(),
+    address: z.string(),
     city: z.string(),
-    district: z.string(),
-    postalCode: z.string().nullable(),
+    area: z.string(),
+    zone: z.string().nullable().optional(),
     isDefault: z.boolean(),
 });
 
@@ -16,10 +17,11 @@ export const CreateAddressSchema = z.object({
     label: z.string().min(1).default('Home'),
     recipientName: z.string().min(1),
     phone: z.string().min(1),
-    addressLine: z.string().min(1),
+    altPhone: z.string().optional(),
+    address: z.string().min(1),
     city: z.string().min(1),
-    district: z.string().min(1),
-    postalCode: z.string().optional(),
+    area: z.string().min(1),
+    zone: z.string().optional(),
     isDefault: z.boolean().default(false),
 });
 
