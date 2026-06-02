@@ -9,6 +9,7 @@ import {
   CreateProductSchema,
   UpdateProductSchema,
   BulkImportResponseSchema,
+  SortImagesSchema,
   BULK_IMPORT_MAX_FILE_SIZE,
   type FileUpload,
 } from "./schema.js";
@@ -332,6 +333,25 @@ const productRoutes: FastifyPluginAsync = async (fastify) => {
             imageFiles,
           });
           return reply.sendOk(product);
+        },
+      });
+
+      app.put("/:id/images/sort", {
+        preHandler: [fastify.requirePermission("update", "products")],
+        schema: {
+          tags: ["Admin | Products"],
+          summary: "Reorder product images",
+          description:
+            "Updates the display order of a product's images. Provide an array of image IDs with their new sort positions.",
+          params: IdParamSchema,
+          body: SortImagesSchema,
+        },
+        handler: async (request, reply) => {
+          const images = await productService.reorderImages(
+            request.params.id,
+            request.body.images,
+          );
+          return reply.sendOk(images);
         },
       });
 

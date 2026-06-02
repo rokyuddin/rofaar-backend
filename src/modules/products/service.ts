@@ -341,6 +341,45 @@ export class ProductService {
     return this.enrichProduct(product);
   }
 
+  // ─── Image Sort ─────────────────────────────────────────────────────────────
+
+  async reorderImages(
+    productId: string,
+    items: { imageId: string; sortOrder: number }[],
+  ) {
+    const product = await db.query.products.findFirst({
+      where: eq(products.id, productId),
+      with: {
+        images: true,
+      },
+    });
+    if (!product) throw new NotFoundError("Product");
+
+    const existingIds = new Set(product.images.map((i) => i.id));
+    for (const item of items) {
+      if (!existingIds.has(item.imageId)) {
+        throw new BadRequestError(
+          `Image ${item.imageId} does not belong to this product`,
+        );
+      }
+    }
+
+    return await db.transaction(async (tx) => {
+      for (const item of items) {
+        await tx
+          .update(productImages)
+          .set({ sortOrder: item.sortOrder })
+          .where(eq(productImages.id, item.imageId));
+      }
+
+      const updated = await tx.query.productImages.findMany({
+        where: eq(productImages.productId, productId),
+        orderBy: (i, { asc }) => [asc(i.sortOrder)],
+      });
+      return updated;
+    });
+  }
+
   // ─── Bulk Import ────────────────────────────────────────────────────────────
 
   async bulkImport(

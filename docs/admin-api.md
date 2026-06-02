@@ -342,6 +342,35 @@ Authorization: Bearer <token>
 
 **Response:** `200` — `{ "success": true, "message": "Product deleted" }`
 
+### Reorder Product Images
+
+```http
+PUT /admin/products/:productId/images/sort
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "images": [
+    { "imageId": "uuid-of-image", "sortOrder": 0 },
+    { "imageId": "uuid-of-another-image", "sortOrder": 1 }
+  ]
+}
+```
+
+Changes the display order of a product's images. The `sortOrder` is 0-based. All image IDs must belong to the specified product.
+
+**Success Response (200):**
+
+```json
+{
+  "success": true,
+  "data": [
+    { "id": "uuid", "productId": "uuid", "url": "https://...", "sortOrder": 0 },
+    { "id": "uuid", "productId": "uuid", "url": "https://...", "sortOrder": 1 }
+  ]
+}
+```
+
 ### Bulk Import Products
 
 ```http
@@ -1820,6 +1849,7 @@ Single file upload to Cloudflare R2.
 | 14 | Products | DELETE | `/admin/products/:id` |
 | 14a | Products | POST | `/admin/products/bulk-import` |
 | 14b | Products | GET | `/admin/products/bulk-import/template` |
+| 14c | Products | PUT | `/admin/products/:id/images/sort` |
 | 15 | Categories | GET | `/admin/categories` |
 | 16 | Categories | POST | `/admin/categories` |
 | 17 | Categories | PUT | `/admin/categories/:id` |

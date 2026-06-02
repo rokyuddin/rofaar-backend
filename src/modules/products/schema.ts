@@ -107,6 +107,31 @@ export const SlugParamSchema = z.object({
   slug: z.string().min(1).describe("URL-friendly product slug"),
 });
 
+// ─── Image Sort ──────────────────────────────────────────────────────────────
+
+export const SortImageItemSchema = z.object({
+  imageId: z
+    .string()
+    .uuid("imageId must be a valid UUID")
+    .describe("UUID of the product image"),
+  sortOrder: z
+    .number()
+    .int("sortOrder must be an integer")
+    .nonnegative("sortOrder cannot be negative")
+    .describe("New sort position (0-based)"),
+});
+
+export const SortImagesSchema = z.object({
+  images: z
+    .array(SortImageItemSchema)
+    .min(1, "At least one image is required")
+    .max(50, "Cannot reorder more than 50 images at once")
+    .describe("Array of image IDs with their new sort positions"),
+});
+
+export type SortImageItem = z.infer<typeof SortImageItemSchema>;
+export type SortImages = z.infer<typeof SortImagesSchema>;
+
 // ─── Bulk Import ─────────────────────────────────────────────────────────────
 
 export const BulkProductRowSchema = z.object({
