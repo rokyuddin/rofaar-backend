@@ -342,6 +342,27 @@ Authorization: Bearer <token>
 
 **Response:** `200` — `{ "success": true, "message": "Product deleted" }`
 
+### List Product Images
+
+```http
+GET /admin/products/:id/images
+Authorization: Bearer <token>
+```
+
+Returns all images for a product, sorted by sort order.
+
+**Success Response (200):**
+
+```json
+{
+  "success": true,
+  "data": [
+    { "id": "uuid", "productId": "uuid", "url": "https://...", "sortOrder": 0 },
+    { "id": "uuid", "productId": "uuid", "url": "https://...", "sortOrder": 1 }
+  ]
+}
+```
+
 ### Reorder Product Images
 
 ```http
@@ -1894,9 +1915,10 @@ Single file upload to Cloudflare R2.
 | 14 | Products | DELETE | `/admin/products/:id` |
 | 14a | Products | POST | `/admin/products/bulk-import` |
 | 14b | Products | GET | `/admin/products/bulk-import/template` |
-| 14c | Products | POST | `/admin/products/:id/images` |
-| 14d | Products | PUT | `/admin/products/:id/images/sort` |
-| 14e | Products | DELETE | `/admin/products/:id/images/:imageId` |
+| 14c | Products | GET | `/admin/products/:id/images` |
+| 14d | Products | POST | `/admin/products/:id/images` |
+| 14e | Products | PUT | `/admin/products/:id/images/sort` |
+| 14f | Products | DELETE | `/admin/products/:id/images/:imageId` |
 | 15 | Categories | GET | `/admin/categories` |
 | 16 | Categories | POST | `/admin/categories` |
 | 17 | Categories | PUT | `/admin/categories/:id` |

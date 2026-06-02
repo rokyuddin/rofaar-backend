@@ -341,6 +341,20 @@ export class ProductService {
     return this.enrichProduct(product);
   }
 
+  // ─── Image List ────────────────────────────────────────────────────────────
+
+  async listImages(productId: string) {
+    const product = await db.query.products.findFirst({
+      where: eq(products.id, productId),
+    });
+    if (!product) throw new NotFoundError("Product");
+
+    return db.query.productImages.findMany({
+      where: eq(productImages.productId, productId),
+      orderBy: (i, { asc }) => [asc(i.sortOrder)],
+    });
+  }
+
   // ─── Image Sort ─────────────────────────────────────────────────────────────
 
   async reorderImages(

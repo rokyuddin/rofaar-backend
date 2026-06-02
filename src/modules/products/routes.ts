@@ -337,6 +337,20 @@ const productRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
+      app.get("/:id/images", {
+        preHandler: [fastify.requirePermission("read", "products")],
+        schema: {
+          tags: ["Admin | Products"],
+          summary: "List product images",
+          description: "Returns all images for a product, sorted by sort order.",
+          params: IdParamSchema,
+        },
+        handler: async (request, reply) => {
+          const images = await productService.listImages(request.params.id);
+          return reply.sendOk(images);
+        },
+      });
+
       app.put("/:id/images/sort", {
         preHandler: [fastify.requirePermission("update", "products")],
         schema: {
