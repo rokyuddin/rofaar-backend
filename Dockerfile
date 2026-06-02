@@ -18,6 +18,8 @@ FROM node:20-alpine AS runner
 RUN addgroup --system --gid 1001 appgroup && \
     adduser --system --uid 1001 appuser
 
+RUN apk add --no-cache wget
+
 WORKDIR /app
 
 RUN npm install -g pnpm
