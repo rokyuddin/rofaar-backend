@@ -14,7 +14,7 @@ import {
   BULK_IMPORT_MAX_FILE_SIZE,
   type FileUpload,
 } from "./schema.js";
-import { IdParamSchema } from "@/shared/types.js";
+import { IdParamSchema, UuidSchema } from "@/shared/types.js";
 import { BadRequestError } from "@/shared/errors.js";
 import { z } from "zod";
 
@@ -50,11 +50,15 @@ const productRoutes: FastifyPluginAsync = async (fastify) => {
           tags: ["Products"],
           summary: "Get product detail",
           description:
-            "Returns the detailed information of a product identified by its unique slug.",
+            "Returns the detailed information of a product identified by its ID (UUID) or unique slug.",
           params: SlugParamSchema,
         },
         handler: async (request, reply) => {
-          const product = await productService.getBySlug(request.params.slug);
+          const param = request.params.slug;
+          const uuidResult = UuidSchema.safeParse(param);
+          const product = uuidResult.success
+            ? await productService.getById(param)
+            : await productService.getBySlug(param);
           const userId = (request as { user?: { id: string } }).user?.id;
           recommendationService
             .logView(userId, product.id)

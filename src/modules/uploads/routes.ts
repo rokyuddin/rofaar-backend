@@ -28,6 +28,7 @@ const uploadRoutes: FastifyPluginAsync = async (fastify) => {
               filename = part.filename;
               mimetype = part.mimetype;
               fileBuffer = await part.toBuffer();
+              break;
             }
           }
 

@@ -5,6 +5,7 @@ import { categories } from "@/db/schema/category.js";
 import { brands } from "@/db/schema/brand.js";
 import { uploadService } from "@/shared/services/upload.js";
 import { NotFoundError, BadRequestError } from "@/shared/errors.js";
+import { UuidSchema } from "@/shared/types.js";
 import type {
   CreateProduct,
   UpdateProduct,
@@ -33,14 +34,53 @@ export class ProductService {
     };
   }
 
+  private async resolveEntitySlug(
+    table: typeof categories | typeof brands,
+    slug: string,
+  ): Promise<string | null> {
+    const [row] = await db
+      .select({ id: table.id })
+      .from(table)
+      .where(eq(table.slug, slug))
+      .limit(1);
+    return row?.id ?? null;
+  }
+
   async list(filters: ProductParams) {
     const { page, limit, category, brand, minPrice, maxPrice, search, sort } =
       filters;
     const offset = (page - 1) * limit;
 
     const conditions = [eq(products.isActive, true)];
-    if (category) conditions.push(eq(products.categoryId, category));
-    if (brand) conditions.push(eq(products.brandId, brand));
+
+    if (category) {
+      const uuidResult = UuidSchema.safeParse(category);
+      if (uuidResult.success) {
+        conditions.push(eq(products.categoryId, category));
+      } else {
+        const catId = await this.resolveEntitySlug(categories, category);
+        if (catId) {
+          conditions.push(eq(products.categoryId, catId));
+        } else {
+          conditions.push(eq(products.id, "00000000-0000-0000-0000-000000000000"));
+        }
+      }
+    }
+
+    if (brand) {
+      const uuidResult = UuidSchema.safeParse(brand);
+      if (uuidResult.success) {
+        conditions.push(eq(products.brandId, brand));
+      } else {
+        const brandId = await this.resolveEntitySlug(brands, brand);
+        if (brandId) {
+          conditions.push(eq(products.brandId, brandId));
+        } else {
+          conditions.push(eq(products.id, "00000000-0000-0000-0000-000000000000"));
+        }
+      }
+    }
+
     if (minPrice !== undefined)
       conditions.push(gte(sql`CAST(${products.price} AS NUMERIC)`, minPrice));
     if (maxPrice !== undefined)
@@ -108,8 +148,35 @@ export class ProductService {
     const conditions = [];
     if (isActive !== undefined)
       conditions.push(eq(products.isActive, isActive));
-    if (category) conditions.push(eq(products.categoryId, category));
-    if (brand) conditions.push(eq(products.brandId, brand));
+
+    if (category) {
+      const uuidResult = UuidSchema.safeParse(category);
+      if (uuidResult.success) {
+        conditions.push(eq(products.categoryId, category));
+      } else {
+        const catId = await this.resolveEntitySlug(categories, category);
+        if (catId) {
+          conditions.push(eq(products.categoryId, catId));
+        } else {
+          conditions.push(eq(products.id, "00000000-0000-0000-0000-000000000000"));
+        }
+      }
+    }
+
+    if (brand) {
+      const uuidResult = UuidSchema.safeParse(brand);
+      if (uuidResult.success) {
+        conditions.push(eq(products.brandId, brand));
+      } else {
+        const brandId = await this.resolveEntitySlug(brands, brand);
+        if (brandId) {
+          conditions.push(eq(products.brandId, brandId));
+        } else {
+          conditions.push(eq(products.id, "00000000-0000-0000-0000-000000000000"));
+        }
+      }
+    }
+
     if (minPrice !== undefined)
       conditions.push(gte(sql`CAST(${products.price} AS NUMERIC)`, minPrice));
     if (maxPrice !== undefined)
@@ -336,8 +403,10 @@ export class ProductService {
         category: true,
         brand: true,
         images: { orderBy: (i, { asc }) => [asc(i.sortOrder)] },
+        tags: { with: { tag: true } },
       },
     });
+    if (!product) throw new NotFoundError("Product");
     return this.enrichProduct(product);
   }
 

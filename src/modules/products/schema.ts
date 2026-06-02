@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PaginationQuerySchema } from "@/shared/types.js";
+import { PaginationQuerySchema, UuidSchema } from "@/shared/types.js";
 
 export const ProductSchema = z.object({
   id: z.string().uuid(),
@@ -32,8 +32,8 @@ export const ProductParamsSchema = z.object({
     .default(10)
     .describe("Number of items per page"),
   search: z.string().optional().describe("Search term for product name"),
-  category: z.string().uuid().optional().describe("Filter by category UUID"),
-  brand: z.string().uuid().optional().describe("Filter by brand UUID"),
+  category: z.string().optional().describe("Filter by category ID or slug"),
+  brand: z.string().optional().describe("Filter by brand ID or slug"),
   minPrice: z.coerce
     .number()
     .nonnegative()
