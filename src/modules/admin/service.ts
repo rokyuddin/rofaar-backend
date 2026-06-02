@@ -38,25 +38,38 @@ export class AdminService {
         const conditions = [];
         if (startDate) conditions.push(gte(orders.createdAt, new Date(startDate)));
         if (endDate) conditions.push(lte(orders.createdAt, new Date(endDate)));
-
         const queryConditions = conditions.length > 0 ? and(...conditions) : undefined;
 
-        const results = await db
-            .select({
-                date: sql<string>`to_char(date_trunc(${dateTruncFormat}, ${orders.createdAt} AT TIME ZONE 'UTC'), 'YYYY-MM-DD')`,
-                revenue: sum(orders.total),
-                orders: count(),
-            })
-            .from(orders)
-            .where(queryConditions)
-            .groupBy(sql`date_trunc(${dateTruncFormat}, ${orders.createdAt} AT TIME ZONE 'UTC')`)
-            .orderBy(sql`date_trunc(${dateTruncFormat}, ${orders.createdAt} AT TIME ZONE 'UTC') ASC`);
+        const whereClause = queryConditions ? sql`WHERE ${queryConditions}` : sql``;
 
-        return results.map(row => ({
-            ...row,
+        const raw = `
+            SELECT date, SUM(revenue)::text AS revenue, SUM(orders)::int AS orders
+            FROM (
+                SELECT
+                    to_char(date_trunc('${dateTruncFormat}', created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS date,
+                    total AS revenue,
+                    1 AS orders
+                FROM orders
+                ${queryConditions ? `WHERE ${this.buildWhere(params)}` : ''}
+            ) AS bucketed
+            GROUP BY date
+            ORDER BY date ASC
+        `;
+
+        const results = await db.execute(sql.raw(raw));
+
+        return (results as any[]).map((row: any) => ({
+            date: row.date,
             revenue: Number(row.revenue ?? 0).toFixed(2),
             orders: Number(row.orders ?? 0),
         }));
+    }
+
+    private buildWhere(params: GetSalesChartInput): string {
+        const parts: string[] = [];
+        if (params.startDate) parts.push(`created_at >= '${params.startDate}'`);
+        if (params.endDate) parts.push(`created_at <= '${params.endDate}'`);
+        return parts.join(' AND ');
     }
 
     async getTopSellingProducts(params: GetTopSellingInput) {
