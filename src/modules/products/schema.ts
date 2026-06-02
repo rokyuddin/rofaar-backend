@@ -107,6 +107,99 @@ export const SlugParamSchema = z.object({
   slug: z.string().min(1).describe("URL-friendly product slug"),
 });
 
+// ─── Bulk Import ─────────────────────────────────────────────────────────────
+
+export const BulkProductRowSchema = z.object({
+  name: z
+    .string()
+    .min(1, "Name is required")
+    .max(256, "Name cannot exceed 256 characters"),
+  slug: z.string().min(1, "Slug is required"),
+  description: z.string().min(4, "Description must be at least 4 characters"),
+  price: z.coerce.number().positive("Price must be a positive number"),
+  costPrice: z.coerce
+    .number()
+    .positive("Cost price must be a positive number"),
+  discountPercentage: z.coerce
+    .number()
+    .min(0, "Discount cannot be negative")
+    .max(100, "Discount cannot exceed 100")
+    .default(0),
+  stock: z.coerce
+    .number()
+    .int("Stock must be an integer")
+    .nonnegative("Stock cannot be negative")
+    .default(0),
+  isActive: z
+    .union([z.boolean(), z.string()])
+    .transform((v) => (typeof v === "string" ? v.toLowerCase() === "true" : v))
+    .default(true),
+  categoryId: z.string().uuid("categoryId must be a valid UUID"),
+  brandId: z.string().uuid("brandId must be a valid UUID"),
+  images: z
+    .string()
+    .optional()
+    .transform((v) => {
+      if (!v || v.trim() === "") return undefined;
+      try {
+        const parsed = JSON.parse(v);
+        if (!Array.isArray(parsed)) {
+          throw new Error("images must be a JSON array of URLs");
+        }
+        return parsed.map((url) => {
+          if (typeof url !== "string" || !z.string().url().safeParse(url).success) {
+            throw new Error("Each image must be a valid URL string");
+          }
+          return { url, sortOrder: 0 };
+        });
+      } catch (e) {
+        if (e instanceof Error && e.message.includes("images must be")) {
+          throw e;
+        }
+        throw new Error(
+          "images must be a valid JSON array, e.g. [\"https://...\"]",
+        );
+      }
+    }),
+});
+
+export const BulkImportErrorSchema = z.object({
+  row: z.number().describe("1-indexed row number where the error occurred"),
+  data: z.record(z.any()).describe("The raw row data that failed validation"),
+  errors: z.array(z.string()).describe("List of validation error messages"),
+});
+
+export const BulkImportResponseSchema = z.object({
+  totalRows: z.number().describe("Total number of data rows in the file"),
+  created: z
+    .number()
+    .describe("Number of products successfully created before the error"),
+  failedAtRow: z
+    .number()
+    .nullable()
+    .describe("Row number where validation failed, or null on full success"),
+  errors: z
+    .array(z.string())
+    .describe("Validation errors for the failed row (empty on success)"),
+  createdProducts: z
+    .array(ProductSchema)
+    .optional()
+    .describe("Created products (only included when import fully succeeds)"),
+});
+
+export const BULK_IMPORT_MAX_ROWS = 500;
+export const BULK_IMPORT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+export const BULK_IMPORT_ALLOWED_MIMETYPES = [
+  "text/csv",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/octet-stream", // Browsers sometimes send this for xlsx
+];
+
+export type BulkProductRow = z.infer<typeof BulkProductRowSchema>;
+export type BulkImportError = z.infer<typeof BulkImportErrorSchema>;
+export type BulkImportResponse = z.infer<typeof BulkImportResponseSchema>;
+
 export type CreateProduct = z.infer<typeof CreateProductSchema>;
 export type UpdateProduct = z.infer<typeof UpdateProductSchema>;
 export type ProductParams = z.infer<typeof ProductParamsSchema>;

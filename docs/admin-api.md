@@ -342,6 +342,70 @@ Authorization: Bearer <token>
 
 **Response:** `200` — `{ "success": true, "message": "Product deleted" }`
 
+### Bulk Import Products
+
+```http
+POST /admin/products/bulk-import
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+
+file=@products.csv   (or products.xlsx)
+```
+
+Upload a CSV or XLSX file to create up to 500 products at once. Stops on the first invalid row and returns row-level error details so the admin can fix and retry. Categories and brands are looked up by UUID; the first 7 columns are required.
+
+**Required columns (header row):**
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `name` | string | 1–256 chars |
+| `slug` | string | unique |
+| `description` | string | min 4 chars |
+| `price` | number | positive |
+| `costPrice` | number | positive |
+| `categoryId` | UUID | must exist in `categories` |
+| `brandId` | UUID | must exist in `brands` |
+| `discountPercentage` | number | 0–100 (default 0) |
+| `stock` | integer | ≥ 0 (default 0) |
+| `isActive` | boolean | `true`/`false` (default `true`) |
+| `images` | JSON array string | optional, e.g. `["https://.../a.jpg"]` |
+
+**Success response (`200`):**
+
+```json
+{
+  "totalRows": 2,
+  "created": 2,
+  "failedAtRow": null,
+  "errors": [],
+  "createdProducts": [ /* full product objects */ ]
+}
+```
+
+**Partial-failure response (`207`):**
+
+```json
+{
+  "totalRows": 5,
+  "created": 2,
+  "failedAtRow": 4,
+  "errors": ["price: Expected number, received nan"],
+  "createdProducts": []
+}
+```
+
+> Rows before `failedAtRow` have already been persisted and cannot be rolled back automatically. Fix the file and re-upload; the import is idempotent on `slug` (duplicates will fail at the `slug already exists` check).
+
+### Download Bulk Import Template
+
+```http
+GET /admin/products/bulk-import/template?format=csv
+GET /admin/products/bulk-import/template?format=xlsx
+Authorization: Bearer <token>
+```
+
+Returns a sample file (CSV or XLSX) with the required columns and a sample data row. Use as a starting point for bulk imports.
+
 ---
 
 ## 5. Categories & brands
@@ -1754,6 +1818,8 @@ Single file upload to Cloudflare R2.
 | 12 | Products | POST | `/admin/products` |
 | 13 | Products | PUT | `/admin/products/:id` |
 | 14 | Products | DELETE | `/admin/products/:id` |
+| 14a | Products | POST | `/admin/products/bulk-import` |
+| 14b | Products | GET | `/admin/products/bulk-import/template` |
 | 15 | Categories | GET | `/admin/categories` |
 | 16 | Categories | POST | `/admin/categories` |
 | 17 | Categories | PUT | `/admin/categories/:id` |

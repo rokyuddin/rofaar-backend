@@ -8,10 +8,13 @@ import {
   AdminProductParamsSchema,
   CreateProductSchema,
   UpdateProductSchema,
+  BulkImportResponseSchema,
+  BULK_IMPORT_MAX_FILE_SIZE,
   type FileUpload,
 } from "./schema.js";
 import { IdParamSchema } from "@/shared/types.js";
 import { BadRequestError } from "@/shared/errors.js";
+import { z } from "zod";
 
 const ALLOWED_MIMETYPES = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -176,6 +179,94 @@ const productRoutes: FastifyPluginAsync = async (fastify) => {
             imageFiles,
           });
           return reply.sendCreated(product);
+        },
+      });
+
+      app.post("/bulk-import", {
+        preHandler: [fastify.requirePermission("create", "products")],
+        schema: {
+          tags: ["Admin | Products"],
+          summary: "Bulk import products from CSV/XLSX",
+          description:
+            "Accepts a multipart upload with a single file (CSV or XLSX). Up to 500 rows. Validates each row, looks up category/brand, and creates products. Stops on the first invalid row and returns row-level error details. On full success, returns the created products.",
+          response: {
+            200: BulkImportResponseSchema,
+            207: BulkImportResponseSchema,
+          },
+          consumes: ["multipart/form-data"],
+        },
+        handler: async (request, reply) => {
+          const file = await request.file();
+          if (!file) {
+            throw new BadRequestError(
+              "No file uploaded. Send a multipart/form-data request with a 'file' field.",
+            );
+          }
+
+          if (file.fieldname !== "file") {
+            throw new BadRequestError(
+              `Unexpected field "${file.fieldname}". Use field name "file".`,
+            );
+          }
+
+          const filename = file.filename || "";
+          const lowerName = filename.toLowerCase();
+          const isCsv = lowerName.endsWith(".csv") || file.mimetype === "text/csv";
+          const isXlsx =
+            lowerName.endsWith(".xlsx") ||
+            lowerName.endsWith(".xls") ||
+            file.mimetype.includes("spreadsheetml") ||
+            file.mimetype === "application/vnd.ms-excel";
+          if (!isCsv && !isXlsx) {
+            throw new BadRequestError(
+              `Unsupported file type: ${file.mimetype || "unknown"}. Allowed: CSV (.csv) or XLSX (.xlsx, .xls).`,
+            );
+          }
+
+          const buffer = await file.toBuffer();
+          if (buffer.length > BULK_IMPORT_MAX_FILE_SIZE) {
+            throw new BadRequestError(
+              `File too large (${(buffer.length / 1024 / 1024).toFixed(2)}MB). Max is ${BULK_IMPORT_MAX_FILE_SIZE / 1024 / 1024}MB.`,
+            );
+          }
+
+          const result = await productService.bulkImport(
+            buffer,
+            filename,
+            file.mimetype,
+          );
+
+          if (result.failedAtRow !== null) {
+            return reply.status(207).send(result);
+          }
+          return reply.send(result);
+        },
+      });
+
+      app.get("/bulk-import/template", {
+        preHandler: [fastify.requirePermission("create", "products")],
+        schema: {
+          tags: ["Admin | Products"],
+          summary: "Download bulk import template",
+          description:
+            "Returns a sample CSV or XLSX file with the required columns and a sample row. Use as a starting point for bulk imports.",
+          querystring: z.object({
+            format: z
+              .enum(["csv", "xlsx"])
+              .default("csv")
+              .describe("Template format: csv (default) or xlsx"),
+          }),
+        },
+        handler: async (request, reply) => {
+          const { format } = request.query;
+          const tpl = await productService.getImportTemplate(format);
+          return reply
+            .header("Content-Type", tpl.contentType)
+            .header(
+              "Content-Disposition",
+              `attachment; filename="${tpl.filename}"`,
+            )
+            .send(tpl.buffer);
         },
       });
 
