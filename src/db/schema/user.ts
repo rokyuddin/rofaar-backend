@@ -17,6 +17,7 @@ export const users = pgTable('users', {
     name: varchar('name', { length: 255 }), // nullable until registration complete
     email: varchar('email', { length: 255 }).unique(), // nullable until registration complete
     phone: varchar('phone', { length: 20 }).notNull().unique(),
+    avatar: varchar('avatar', { length: 500 }),
     passwordHash: text('password_hash'), // nullable until registration complete
 
     roleId: uuid('role_id').notNull(), // FK → roles.id (references added via relations)
