@@ -64,7 +64,7 @@ const orderRoutes: FastifyPluginAsync = async (fastify) => {
                 params: IdParamSchema
             },
             handler: async (request, reply) => {
-                const tracking = await orderService.getTracking(request.params.id);
+                const tracking = await orderService.getTracking(request.user.id, request.params.id);
                 return reply.sendOk(tracking);
             },
         });
@@ -77,7 +77,7 @@ const orderRoutes: FastifyPluginAsync = async (fastify) => {
                 params: IdParamSchema
             },
             handler: async (request, reply) => {
-                const result = await orderService.cancel(request.params.id);
+                const result = await orderService.customerCancel(request.user.id, request.params.id);
                 return reply.sendOk(result);
             },
         });
@@ -293,7 +293,7 @@ const orderRoutes: FastifyPluginAsync = async (fastify) => {
                 body: CancelOrderSchema
             },
             handler: async (request, reply) => {
-                const result = await orderService.rejectCancelRequest(request.params.id, request.body);
+                const result = await orderService.rejectCancelRequest(request.params.id, request.body, request.user.id);
                 return reply.sendOk(result, 'Order cancel request rejected');
             },
         });

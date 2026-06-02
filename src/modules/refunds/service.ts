@@ -1,8 +1,9 @@
 import { db } from '@/config/db.js';
 import { refunds } from '@/db/schema/refund.js';
-import { orders } from '@/db/schema/order.js';
+import { orders, orderItems } from '@/db/schema/order.js';
 import { eq, and } from 'drizzle-orm';
 import { NotFoundError, BadRequestError } from '@/shared/errors.js';
+import { inventoryService } from '@/modules/inventory/service.js';
 
 export class RefundService {
     async requestRefund(userId: string, data: { orderId: string; reason: string }) {
@@ -13,7 +14,6 @@ export class RefundService {
         if (!order) throw new NotFoundError('Order');
         if (order.status !== 'delivered') throw new BadRequestError('Only delivered orders can be refunded');
 
-        // Check if refund already exists
         const existing = await db.query.refunds.findFirst({
             where: eq(refunds.orderId, data.orderId),
         });
@@ -38,8 +38,8 @@ export class RefundService {
 
     async adminList() {
         return db.query.refunds.findMany({
-            with: { 
-                order: true, 
+            with: {
+                order: true,
                 user: {
                     columns: {
                         id: true,
@@ -47,26 +47,42 @@ export class RefundService {
                         phone: true,
                         email: true,
                     }
-                } 
+                }
             },
             orderBy: (refunds, { desc }) => [desc(refunds.createdAt)],
         });
     }
 
     async approveRefund(refundId: string, adminNote?: string | undefined) {
-        const [refund] = await db.update(refunds)
-            .set({ status: 'approved', adminNote, updatedAt: new Date() })
-            .where(eq(refunds.id, refundId))
-            .returning();
-        
-        if (!refund) throw new NotFoundError('Refund');
+        return await db.transaction(async (tx) => {
+            const [refund] = await tx.update(refunds)
+                .set({ status: 'approved', adminNote, updatedAt: new Date() })
+                .where(eq(refunds.id, refundId))
+                .returning();
 
-        // Update order status or payment status if needed
-        await db.update(orders)
-            .set({ status: 'returned', paymentStatus: 'refunded' })
-            .where(eq(orders.id, refund.orderId));
+            if (!refund) throw new NotFoundError('Refund');
 
-        return refund;
+            const [updated] = await tx.update(orders)
+                .set({ status: 'returned', paymentStatus: 'refunded' })
+                .where(eq(orders.id, refund.orderId))
+                .returning();
+
+            if (!updated) throw new NotFoundError('Order');
+
+            const items = await tx.query.orderItems.findMany({
+                where: eq(orderItems.orderId, refund.orderId),
+            });
+            for (const item of items) {
+                await inventoryService.adjustStock({
+                    productId: item.productId,
+                    quantityChange: item.quantity,
+                    type: 'return_restock',
+                    note: `Refund ${refundId} approved for order ${refund.orderId}`,
+                }, tx);
+            }
+
+            return refund;
+        });
     }
 
     async rejectRefund(refundId: string, adminNote: string) {
@@ -74,7 +90,7 @@ export class RefundService {
             .set({ status: 'rejected', adminNote, updatedAt: new Date() })
             .where(eq(refunds.id, refundId))
             .returning();
-        
+
         if (!refund) throw new NotFoundError('Refund');
         return refund;
     }

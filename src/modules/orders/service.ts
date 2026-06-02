@@ -1,4 +1,4 @@
-import { eq, and, sql, desc, count } from 'drizzle-orm';
+import { eq, and, sql, desc, count, gte } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import { orders, orderItems } from '@/db/schema/order.js';
 import { orderHistory } from '@/db/schema/order_history.js';
@@ -7,6 +7,7 @@ import { products } from '@/db/schema/product.js';
 import { coupons } from '@/db/schema/coupon.js';
 import { refunds } from '@/db/schema/refund.js';
 import { shippingMethods } from '@/db/schema/shipping.js';
+import { addresses } from '@/db/schema/address.js';
 import { inventoryService } from '@/modules/inventory/service.js';
 import { NotFoundError, BadRequestError } from '@/shared/errors.js';
 import type { CreateOrder, OrderParams, UpdateStatus, UpdatePaymentStatus, CancelOrder } from './schema.js';
@@ -59,9 +60,12 @@ export class OrderService {
         return order;
     }
 
-    async getTracking(orderId: string) {
+    async getTracking(userId: string | null, orderId: string) {
+        const where = userId
+            ? and(eq(orders.id, orderId), eq(orders.userId, userId))
+            : eq(orders.id, orderId);
         const order = await db.query.orders.findFirst({
-            where: eq(orders.id, orderId),
+            where,
             with: {
                 items: { with: { product: true } },
                 address: true,
@@ -115,44 +119,64 @@ export class OrderService {
  
     async create(userId: string, data: CreateOrder) {
         const { addressId, paymentMethod, shippingMethodId, couponCode } = data;
- 
+
         const cart = await db.query.cartItems.findMany({
             where: eq(cartItems.userId, userId),
             with: { product: true },
         });
- 
+
         if (!cart.length) throw new BadRequestError('Cart is empty');
+
+        const address = await db.query.addresses.findFirst({
+            where: and(eq(addresses.id, addressId), eq(addresses.userId, userId)),
+        });
+        if (!address) throw new BadRequestError('Address not found or does not belong to you');
 
         const shippingMethod = await db.query.shippingMethods.findFirst({
             where: eq(shippingMethods.id, shippingMethodId),
         });
         if (!shippingMethod) throw new BadRequestError('Invalid shipping method');
- 
+        if (!shippingMethod.isActive) throw new BadRequestError('Shipping method is not active');
+
         let subtotal = cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
         let discountAmount = 0;
         let couponId: string | null = null;
- 
+
         if (couponCode) {
             const coupon = await db.query.coupons.findFirst({
                 where: and(eq(coupons.code, couponCode), eq(coupons.isActive, true)),
             });
             if (!coupon) throw new BadRequestError('Invalid or expired coupon');
             if (coupon.expiresAt && coupon.expiresAt < new Date()) throw new BadRequestError('Coupon expired');
- 
+
             if (coupon.minOrderAmount && subtotal < Number(coupon.minOrderAmount)) {
                 throw new BadRequestError(`Min order amount is ${coupon.minOrderAmount}`);
             }
- 
+
+            if (coupon.maxUsageCount !== null && coupon.usageCount >= coupon.maxUsageCount) {
+                throw new BadRequestError('Coupon usage limit reached');
+            }
+
             discountAmount = coupon.discountType === 'percentage'
                 ? (subtotal * Number(coupon.discountValue)) / 100
                 : Number(coupon.discountValue);
             couponId = coupon.id;
         }
- 
+
         const shippingFee = Number(shippingMethod.cost);
         const total = Math.max(0, subtotal - discountAmount + shippingFee);
- 
+
         return db.transaction(async (tx) => {
+            for (const item of cart) {
+                const product = await tx.query.products.findFirst({
+                    where: eq(products.id, item.productId),
+                });
+                if (!product) throw new NotFoundError(`Product ${item.productId} not found`);
+                if (product.stock < item.quantity) {
+                    throw new BadRequestError(`Insufficient stock for ${product.name}. Available: ${product.stock}, requested: ${item.quantity}`);
+                }
+            }
+
             const [o] = await tx.insert(orders).values({
                 userId,
                 addressId,
@@ -165,7 +189,7 @@ export class OrderService {
                 shippingFee: shippingFee.toFixed(2),
                 total: total.toFixed(2),
             }).returning();
- 
+
             await tx.insert(orderItems).values(
                 cart.map((item) => ({
                     orderId: o!.id,
@@ -175,7 +199,7 @@ export class OrderService {
                     totalPrice: (Number(item.price) * item.quantity).toFixed(2),
                 }))
             );
- 
+
             for (const item of cart) {
                 await inventoryService.adjustStock({
                     productId: item.productId,
@@ -185,15 +209,15 @@ export class OrderService {
                     performedBy: userId,
                 }, tx);
             }
- 
+
             if (couponId) {
                 await tx.update(coupons)
                     .set({ usageCount: sql`${coupons.usageCount} + 1` })
                     .where(eq(coupons.id, couponId));
             }
- 
+
             await tx.delete(cartItems).where(eq(cartItems.userId, userId));
- 
+
             await tx.insert(orderHistory).values({
                 orderId: o!.id,
                 performedBy: userId,
@@ -202,7 +226,7 @@ export class OrderService {
                 newStatus: 'pending',
                 note: `Order placed via ${paymentMethod.toUpperCase()}. Shipping: ${shippingMethod.name}`,
             });
- 
+
             return o!;
         });
     }
@@ -221,7 +245,7 @@ export class OrderService {
 
         if (!updated) throw new NotFoundError('Order');
 
-        await this.logHistory(id, 'placed', previousStatus, data.status, performedBy ?? null);
+        await this.logHistory(id, data.status as any, previousStatus, data.status, performedBy ?? null);
         return updated;
     }
 
@@ -345,16 +369,46 @@ export class OrderService {
         }
         const previousStatus = order.status;
 
-        const [updated] = await db
-            .update(orders)
-            .set({ status: 'returned', updatedAt: new Date() })
-            .where(eq(orders.id, id))
-            .returning();
+        return await db.transaction(async (tx) => {
+            const [updated] = await tx
+                .update(orders)
+                .set({ status: 'returned', updatedAt: new Date() })
+                .where(eq(orders.id, id))
+                .returning();
 
-        if (!updated) throw new NotFoundError('Order');
+            if (!updated) throw new NotFoundError('Order');
 
-        await this.logHistory(id, 'returned', previousStatus, 'returned', performedBy ?? null);
-        return updated;
+            const items = await tx.query.orderItems.findMany({
+                where: eq(orderItems.orderId, id),
+            });
+            for (const item of items) {
+                await inventoryService.adjustStock({
+                    productId: item.productId,
+                    quantityChange: item.quantity,
+                    type: 'return_restock',
+                    note: `Order ${id} returned`,
+                    performedBy: performedBy ?? order.userId,
+                }, tx);
+            }
+
+            await tx.insert(orderHistory).values({
+                orderId: id,
+                performedBy: performedBy ?? order.userId,
+                action: 'returned',
+                previousStatus,
+                newStatus: 'returned',
+            });
+
+            return updated;
+        });
+    }
+
+    async customerCancel(userId: string, id: string) {
+        const order = await db.query.orders.findFirst({
+            where: and(eq(orders.id, id), eq(orders.userId, userId)),
+        });
+        if (!order) throw new NotFoundError('Order');
+        return this.cancel(id, undefined, userId);
     }
 
     async cancel(id: string, data?: CancelOrder, performedBy?: string | null) {
@@ -395,6 +449,12 @@ export class OrderService {
                 }).onConflictDoNothing();
             }
 
+            if (order.couponId) {
+                await tx.update(coupons)
+                    .set({ usageCount: sql`GREATEST(${coupons.usageCount} - 1, 0)` })
+                    .where(eq(coupons.id, order.couponId));
+            }
+
             await tx.insert(orderHistory).values({
                 orderId: id,
                 performedBy: performedBy ?? order.userId,
@@ -414,16 +474,49 @@ export class OrderService {
         return this.cancel(id, data, performedBy ?? null);
     }
 
-    async rejectCancelRequest(id: string, _data: CancelOrder) {
+    async rejectCancelRequest(id: string, data: CancelOrder, performedBy?: string | null) {
+        const order = await this.requireOrder(id);
+
+        await db.insert(orderHistory).values({
+            orderId: id,
+            performedBy: performedBy ?? null,
+            action: 'cancelled',
+            previousStatus: order.status,
+            newStatus: order.status,
+            note: data?.comment ?? 'Cancel request rejected',
+        });
+
         return this.adminGetById(id);
     }
 
     // ─── Admin Deletion ───────────────────────────────────────────────────────
 
     async delete(id: string) {
-        const [order] = await db.delete(orders).where(eq(orders.id, id)).returning();
-        if (!order) throw new NotFoundError('Order');
-        return order;
+        const order = await this.requireOrder(id);
+
+        return await db.transaction(async (tx) => {
+            const items = await tx.query.orderItems.findMany({
+                where: eq(orderItems.orderId, id),
+            });
+            for (const item of items) {
+                await inventoryService.adjustStock({
+                    productId: item.productId,
+                    quantityChange: item.quantity,
+                    type: 'return_restock',
+                    note: `Order ${id} deleted by admin`,
+                }, tx);
+            }
+
+            if (order.couponId) {
+                await tx.update(coupons)
+                    .set({ usageCount: sql`GREATEST(${coupons.usageCount} - 1, 0)` })
+                    .where(eq(coupons.id, order.couponId));
+            }
+
+            const [deleted] = await tx.delete(orders).where(eq(orders.id, id)).returning();
+            if (!deleted) throw new NotFoundError('Order');
+            return deleted;
+        });
     }
 }
 
