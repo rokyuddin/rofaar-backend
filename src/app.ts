@@ -54,6 +54,19 @@ export async function buildApp() {
     trustProxy: true,
   });
 
+  // Support empty JSON body (e.g. DELETE requests with Content-Type: application/json)
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
+    if (body === "") {
+      done(null, {});
+    } else {
+      try {
+        done(null, JSON.parse(body as string));
+      } catch (err) {
+        done(err as Error, undefined);
+      }
+    }
+  });
+
 // ─── Core Plugins (Must be first) ──────────────────────────────────────────
    await app.register(zodPlugin);
    await app.register(responsePlugin);
