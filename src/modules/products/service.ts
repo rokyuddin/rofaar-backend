@@ -428,6 +428,37 @@ export class ProductService {
     }
   }
 
+  // ─── Image Delete ──────────────────────────────────────────────────────────
+
+  async deleteImage(productId: string, imageId: string) {
+    const product = await db.query.products.findFirst({
+      where: eq(products.id, productId),
+    });
+    if (!product) throw new NotFoundError("Product");
+
+    const image = await db.query.productImages.findFirst({
+      where: eq(productImages.id, imageId),
+    });
+    if (!image) throw new NotFoundError("Product image");
+    if (image.productId !== productId) {
+      throw new BadRequestError("Image does not belong to this product");
+    }
+
+    await db.delete(productImages).where(eq(productImages.id, imageId));
+
+    // Attempt R2 cleanup if image was uploaded
+    if (image.url.includes("r2.dev")) {
+      const key = image.url.split("/").pop();
+      if (key) uploadService.deleteFile(`products/${key}`).catch(() => {});
+    }
+
+    const remaining = await db.query.productImages.findMany({
+      where: eq(productImages.productId, productId),
+      orderBy: (i, { asc }) => [asc(i.sortOrder)],
+    });
+    return remaining;
+  }
+
   // ─── Bulk Import ────────────────────────────────────────────────────────────
 
   async bulkImport(

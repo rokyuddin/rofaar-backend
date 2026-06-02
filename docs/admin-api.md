@@ -395,6 +395,27 @@ Uploads one or more images to an existing product. Images are appended to the cu
 }
 ```
 
+### Delete Product Image
+
+```http
+DELETE /admin/products/:id/images/:imageId
+Authorization: Bearer <token>
+```
+
+Deletes a single image from a product. If the image was uploaded to R2, the file is also removed. Returns the remaining images.
+
+**Success Response (200):**
+
+```json
+{
+  "success": true,
+  "data": [
+    { "id": "uuid", "productId": "uuid", "url": "https://...", "sortOrder": 0 },
+    { "id": "uuid", "productId": "uuid", "url": "https://...", "sortOrder": 1 }
+  ]
+}
+```
+
 ### Bulk Import Products
 
 ```http
@@ -1875,6 +1896,7 @@ Single file upload to Cloudflare R2.
 | 14b | Products | GET | `/admin/products/bulk-import/template` |
 | 14c | Products | POST | `/admin/products/:id/images` |
 | 14d | Products | PUT | `/admin/products/:id/images/sort` |
+| 14e | Products | DELETE | `/admin/products/:id/images/:imageId` |
 | 15 | Categories | GET | `/admin/categories` |
 | 16 | Categories | POST | `/admin/categories` |
 | 17 | Categories | PUT | `/admin/categories/:id` |

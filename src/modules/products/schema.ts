@@ -109,6 +109,13 @@ export const SlugParamSchema = z.object({
 
 // ─── Image Sort ──────────────────────────────────────────────────────────────
 
+export const ImageIdParamSchema = z.object({
+  id: z.string().uuid("id must be a valid UUID"),
+  imageId: z.string().uuid("imageId must be a valid UUID"),
+});
+
+export type ImageIdParams = z.infer<typeof ImageIdParamSchema>;
+
 export const SortImageItemSchema = z.object({
   imageId: z
     .string()

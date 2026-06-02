@@ -10,6 +10,7 @@ import {
   UpdateProductSchema,
   BulkImportResponseSchema,
   SortImagesSchema,
+  ImageIdParamSchema,
   BULK_IMPORT_MAX_FILE_SIZE,
   type FileUpload,
 } from "./schema.js";
@@ -399,6 +400,24 @@ const productRoutes: FastifyPluginAsync = async (fastify) => {
             imageFiles,
           );
           return reply.sendCreated(images);
+        },
+      });
+
+      app.delete("/:id/images/:imageId", {
+        preHandler: [fastify.requirePermission("update", "products")],
+        schema: {
+          tags: ["Admin | Products"],
+          summary: "Delete product image",
+          description:
+            "Deletes a single image from a product's image set. If the image was uploaded to R2, it is also cleaned up.",
+          params: ImageIdParamSchema,
+        },
+        handler: async (request, reply) => {
+          const images = await productService.deleteImage(
+            request.params.id,
+            request.params.imageId,
+          );
+          return reply.sendOk(images);
         },
       });
 
