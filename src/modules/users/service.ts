@@ -1,7 +1,7 @@
 import { db } from '@/config/db.js';
 import { users } from '@/db/schema/user.js';
 import { eq } from 'drizzle-orm';
-import { NotFoundError } from '@/shared/errors.js';
+import { NotFoundError, BadRequestError } from '@/shared/errors.js';
 import type { AdminUpdateUserInput } from './schema.js';
 
 export class UserService {
@@ -21,8 +21,13 @@ export class UserService {
         return user;
     }
 
-    async adminList() {
+    async adminList(status?: string) {
+        const where = status && status !== 'all'
+            ? eq(users.registrationStep, status)
+            : undefined;
+
         return db.query.users.findMany({
+            where,
             columns: {
                 passwordHash: false,
                 resetToken: false,
@@ -84,6 +89,38 @@ export class UserService {
         const [user] = await db.delete(users).where(eq(users.id, id)).returning();
         if (!user) throw new NotFoundError('User');
         return user;
+    }
+
+    async approveUser(id: string) {
+        const user = await db.query.users.findFirst({
+            where: eq(users.id, id),
+        });
+
+        if (!user) throw new NotFoundError('User');
+        if (user.registrationStep !== 'pending') {
+            throw new BadRequestError('User is not pending approval');
+        }
+
+        await db.update(users).set({
+            registrationStep: 'completed',
+            isVerified: true,
+            updatedAt: new Date(),
+        }).where(eq(users.id, id));
+
+        return this.adminGetById(id);
+    }
+
+    async rejectUser(id: string) {
+        const user = await db.query.users.findFirst({
+            where: eq(users.id, id),
+        });
+
+        if (!user) throw new NotFoundError('User');
+        if (user.registrationStep !== 'pending') {
+            throw new BadRequestError('User is not pending approval');
+        }
+
+        await db.delete(users).where(eq(users.id, id));
     }
 }
 

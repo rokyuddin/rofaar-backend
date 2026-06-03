@@ -55,6 +55,39 @@ export class AuthService {
         console.log(`[SMS MOCK] Registration OTP for ${phone}: ${code}`);
     }
 
+    /** Single-step registration: creates a pending user awaiting admin approval. */
+    async registerDirect(data: { name: string; phone: string; email?: string | undefined; password: string }) {
+        const existingPhone = await db.query.users.findFirst({
+            where: eq(users.phone, data.phone),
+        });
+        if (existingPhone) throw new ConflictError('User already registered with this phone number');
+
+        if (data.email) {
+            const existingEmail = await db.query.users.findFirst({
+                where: eq(users.email, data.email),
+            });
+            if (existingEmail) throw new ConflictError('Email already in use');
+        }
+
+        const customerRole = await db.query.roles.findFirst({
+            where: eq(roles.name, 'customer'),
+        });
+        if (!customerRole) throw new NotFoundError('Default role not seeded');
+
+        const passwordHash = await bcrypt.hash(data.password, 12);
+
+        await db.insert(users).values({
+            name: data.name,
+            phone: data.phone,
+            email: data.email ?? null,
+            passwordHash,
+            roleId: customerRole.id,
+            registrationStep: 'pending',
+            isVerified: false,
+            isActive: true,
+        });
+    }
+
     /** Step 2: Verify OTP and return a temporary registration token. */
     async verifyRegistrationOtp(phone: string, code: string) {
         const otpRecord = await db.query.otps.findFirst({
@@ -125,11 +158,18 @@ export class AuthService {
     /** Login and return the user record with role name. */
     async login(data: { phone: string; password: string }) {
         const user = await db.query.users.findFirst({
-            where: and(eq(users.phone, data.phone), eq(users.registrationStep, 'completed')),
+            where: eq(users.phone, data.phone),
             with: { role: { columns: { name: true } } },
         });
 
-        if (!user || !user.isActive) throw new UnauthorizedError('Invalid phone or password');
+        if (!user) throw new UnauthorizedError('Invalid phone or password');
+        if (!user.isActive) throw new UnauthorizedError('Account is inactive');
+        if (user.registrationStep === 'pending') {
+            throw new UnauthorizedError('Your account is pending approval. Please wait for admin verification.');
+        }
+        if (user.registrationStep !== 'completed') {
+            throw new UnauthorizedError('Please complete your registration first.');
+        }
 
         const valid = await bcrypt.compare(data.password, user.passwordHash!);
         if (!valid) throw new UnauthorizedError('Invalid phone or password');

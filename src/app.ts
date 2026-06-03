@@ -39,6 +39,7 @@ import qaRoutes from "@/modules/qa/routes.js";
 import searchRoutes from "@/modules/search/routes.js";
 import rbacRoutes from "@/modules/rbac/routes.js";
 import steadfastRoutes from "@/modules/steadfast/routes.js";
+import countsRoutes from "@/modules/counts/routes.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -147,6 +148,7 @@ export async function buildApp() {
       await api.register(rbacRoutes);
       await api.register(steadfastRoutes);
       await api.register(uploadRoutes);
+      await api.register(countsRoutes);
     },
     { prefix: "/api/v1" },
   );

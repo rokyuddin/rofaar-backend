@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { userService } from './service.js';
 import { UpdateProfileSchema, AdminUpdateUserSchema } from './schema.js';
 import { IdParamSchema } from '@/shared/types.js';
+import { z } from 'zod';
 
 const userRoutes: FastifyPluginAsync = async (fastify) => {
   // ─── Protected Routes ───────────────────────────────────────────────────────
@@ -51,9 +52,14 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         schema: {
           tags: ["Admin | Users"],
           summary: "List users",
+          description: "Returns all users. Optionally filter by registration status.",
+          querystring: z.object({
+            status: z.enum(['pending', 'completed', 'all']).optional(),
+          }),
         },
-        handler: async (_request, reply) => {
-          const users = await userService.adminList();
+        handler: async (request, reply) => {
+          const { status } = request.query as { status?: string };
+          const users = await userService.adminList(status);
           return reply.sendOk(users);
         },
       });
@@ -81,6 +87,32 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
         handler: async (request, reply) => {
           const user = await userService.adminUpdate(request.params.id, request.body);
           return reply.sendOk(user);
+        },
+      });
+
+      app.patch("/:id/approve", {
+        schema: {
+          tags: ["Admin | Users"],
+          summary: "Approve pending user",
+          description: "Approves a pending user registration. Sets registrationStep to 'completed' and isVerified to true.",
+          params: IdParamSchema,
+        },
+        handler: async (request, reply) => {
+          const user = await userService.approveUser(request.params.id);
+          return reply.sendOk(user, "User approved successfully");
+        },
+      });
+
+      app.patch("/:id/reject", {
+        schema: {
+          tags: ["Admin | Users"],
+          summary: "Reject pending user",
+          description: "Rejects and deletes a pending user registration.",
+          params: IdParamSchema,
+        },
+        handler: async (request, reply) => {
+          await userService.rejectUser(request.params.id);
+          return reply.sendOk(null, "User rejected and deleted successfully");
         },
       });
 
