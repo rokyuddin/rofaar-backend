@@ -2,7 +2,15 @@ import { z } from 'zod';
 
 // ─── Auth Schemas ────────────────────────────────────────────────────────────
 
-// Step 1: Request OTP
+// ─── New Registration (Single-Step) ─────────────────────────────────────────
+export const RegisterBodySchema = z.object({
+    name: z.string().min(2).max(120),
+    phone: z.string().min(10).max(20),
+    email: z.string().email().optional(),
+    password: z.string().min(8),
+});
+
+// Step 1: Request OTP (DISABLED)
 export const RequestOtpBodySchema = z.object({
     phone: z.string().min(10).max(20),
 });

@@ -2,6 +2,7 @@ import type { FastifyPluginAsync, FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { authService } from "./service.js";
 import {
+  RegisterBodySchema,
   RequestOtpBodySchema,
   VerifyOtpBodySchema,
   CompleteRegistrationBodySchema,
@@ -103,64 +104,61 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     async (instance) => {
       const app = instance.withTypeProvider<ZodTypeProvider>();
 
+      app.post("/register", {
+        schema: {
+          tags: ["Authentication"],
+          summary: "Register a new account",
+          description:
+            "Registers a new user with name, phone, and password. Email is optional. Account will be pending until approved by an admin.",
+          body: RegisterBodySchema,
+        },
+        handler: async (request, reply) => {
+          await authService.registerDirect(request.body);
+          return reply.sendCreated(null, "Registration successful. Please wait for admin approval.");
+        },
+      });
+
       app.post("/register/send-otp", {
         schema: {
           tags: ["Authentication"],
-          summary: "Send registration OTP",
-          description:
-            "Sends a 6-digit OTP to the provided phone number for registration.",
+          summary: "Send registration OTP (disabled)",
+          description: "This endpoint is currently disabled.",
           body: RequestOtpBodySchema,
         },
-        handler: async (request, reply) => {
-          await authService.sendRegistrationOtp(request.body.phone);
-          return reply.sendOk(null, "OTP sent successfully");
+        handler: async (_request, reply) => {
+          return reply.status(403).send({
+            success: false,
+            message: "Registration via OTP is currently disabled. Please use the new registration endpoint.",
+          });
         },
       });
 
       app.post("/register/verify-otp", {
         schema: {
           tags: ["Authentication"],
-          summary: "Verify registration OTP",
-          description:
-            "Verifies the OTP sent to the phone number and returns a registration token.",
+          summary: "Verify registration OTP (disabled)",
+          description: "This endpoint is currently disabled.",
           body: VerifyOtpBodySchema,
         },
-        handler: async (request, reply) => {
-          const token = await authService.verifyRegistrationOtp(
-            request.body.phone,
-            request.body.otp,
-          );
-          return reply.sendOk({ token });
+        handler: async (_request, reply) => {
+          return reply.status(403).send({
+            success: false,
+            message: "Registration via OTP is currently disabled. Please use the new registration endpoint.",
+          });
         },
       });
 
       app.post("/register/complete", {
         schema: {
           tags: ["Authentication"],
-          summary: "Complete registration",
-          description:
-            "Completes the registration process using the registration token and profile info.",
+          summary: "Complete registration (disabled)",
+          description: "This endpoint is currently disabled.",
           body: CompleteRegistrationBodySchema,
-          response: { 201: AuthResponseSchema },
         },
-        handler: async (request, reply) => {
-          const { token, ...profileData } = request.body;
-          const user = await authService.completeRegistration(
-            token,
-            profileData,
-          );
-          const tokenResponse = fastify.jwt.sign({ sub: user.id });
-          const refreshToken = await authService.createRefreshToken(user.id);
-
-          return reply.sendCreated({
-            token: tokenResponse,
-            refreshToken,
-            user: {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              role: user.role,
-            },
+        handler: async (_request, reply) => {
+          return reply.status(403).send({
+            success: false,
+            message: "Registration via OTP is currently disabled. Please use the new registration endpoint.",
           });
         },
       });
