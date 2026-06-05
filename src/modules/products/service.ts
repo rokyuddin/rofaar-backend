@@ -11,6 +11,7 @@ import type {
   UpdateProduct,
   ProductParams,
   AdminProductParams,
+  NewArrivalsParams,
   FileUpload,
   BulkImportResponse,
 } from "./schema.js";
@@ -129,6 +130,23 @@ export class ProductService {
       rows: rows.map((r) => this.enrichProduct(r)),
       total: Number(totalResult[0]?.value ?? 0),
     };
+  }
+
+  async getNewArrivals(filters: NewArrivalsParams) {
+    const { limit } = filters;
+
+    const rows = await db.query.products.findMany({
+      where: eq(products.isActive, true),
+      with: {
+        category: true,
+        brand: true,
+        images: { orderBy: (i, { asc }) => [asc(i.sortOrder)] },
+      },
+      limit,
+      orderBy: [desc(products.createdAt)],
+    });
+
+    return rows.map((r) => this.enrichProduct(r));
   }
 
   async adminList(filters: AdminProductParams) {

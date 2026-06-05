@@ -232,9 +232,20 @@ export type BulkProductRow = z.infer<typeof BulkProductRowSchema>;
 export type BulkImportError = z.infer<typeof BulkImportErrorSchema>;
 export type BulkImportResponse = z.infer<typeof BulkImportResponseSchema>;
 
+export const NewArrivalsParamsSchema = z.object({
+  limit: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(50)
+    .default(10)
+    .describe("Number of new arrival products to return"),
+});
+
 export type CreateProduct = z.infer<typeof CreateProductSchema>;
 export type UpdateProduct = z.infer<typeof UpdateProductSchema>;
 export type ProductParams = z.infer<typeof ProductParamsSchema>;
 export type AdminProductParams = z.infer<typeof AdminProductParamsSchema>;
+export type NewArrivalsParams = z.infer<typeof NewArrivalsParamsSchema>;
 export type Image = z.infer<typeof ImageSchema>;
 export type FileUpload = z.infer<typeof FileUploadSchema>;

@@ -11,6 +11,7 @@ import {
   BulkImportResponseSchema,
   SortImagesSchema,
   ImageIdParamSchema,
+  NewArrivalsParamsSchema,
   BULK_IMPORT_MAX_FILE_SIZE,
   type FileUpload,
 } from "./schema.js";
@@ -42,6 +43,20 @@ const productRoutes: FastifyPluginAsync = async (fastify) => {
             limit: request.query.limit,
             total,
           });
+        },
+      });
+
+      app.get("/new-arrivals", {
+        schema: {
+          tags: ["Products"],
+          summary: "New arrivals",
+          description:
+            "Returns the most recently added active products, ordered by creation date descending.",
+          querystring: NewArrivalsParamsSchema,
+        },
+        handler: async (request, reply) => {
+          const products = await productService.getNewArrivals(request.query);
+          return reply.sendOk(products);
         },
       });
 

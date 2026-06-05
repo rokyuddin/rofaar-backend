@@ -7,7 +7,7 @@ export const RegisterBodySchema = z.object({
     name: z.string().min(2).max(120),
     phone: z.string().min(10).max(20),
     email: z.string().email().optional(),
-    password: z.string().min(8),
+    password: z.string().min(6),
 });
 
 // Step 1: Request OTP (DISABLED)
@@ -26,7 +26,7 @@ export const CompleteRegistrationBodySchema = z.object({
     token: z.string(),
     name: z.string().min(2).max(120),
     email: z.string().email(),
-    password: z.string().min(8),
+    password: z.string().min(6),
 });
 
 // Login
@@ -55,14 +55,14 @@ export const VerifyResetOtpBodySchema = z.object({
 
 export const ResetPasswordWithTokenSchema = z.object({
     resetToken: z.string().min(1),
-    newPassword: z.string().min(8),
+    newPassword: z.string().min(6),
 });
 
 // ─── Authenticated Profile Updates ───────────────────────────────────────────
 
 export const ChangePasswordBodySchema = z.object({
     oldPassword: z.string().min(1),
-    newPassword: z.string().min(8),
+    newPassword: z.string().min(6),
 });
 
 export const UpdateProfileBodySchema = z.object({
