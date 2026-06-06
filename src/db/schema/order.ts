@@ -15,6 +15,7 @@ import { coupons } from './coupon';
 import { refunds } from './refund';
 import { payments } from './payment';
 import { shippingMethods } from './shipping';
+import { productVariants } from './productVariant';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ export const orders = pgTable('orders', {
     discountAmount: numeric('discount_amount', { precision: 10, scale: 2 }).notNull().default('0'),
     total: numeric('total', { precision: 10, scale: 2 }).notNull(),
     paymentTransactionId: varchar('payment_transaction_id', { length: 255 }),
-    
+
     // Shipping
     shippingMethodId: uuid('shipping_method_id').references(() => shippingMethods.id),
     shippingFee: numeric('shipping_fee', { precision: 10, scale: 2 }).notNull().default('0'),
@@ -89,6 +90,11 @@ export const orderItems = pgTable('order_items', {
     productId: uuid('product_id')
         .notNull()
         .references(() => products.id),
+    variantId: uuid('variant_id').references(() => productVariants.id, { onDelete: 'set null' }),
+    // variantName / variantSku are NOT NULL snapshots so the order receipt
+    // renders correctly even if the variant is later deleted (FK is set null).
+    variantName: varchar('variant_name', { length: 255 }).notNull(),
+    variantSku: varchar('variant_sku', { length: 100 }).notNull(),
     quantity: integer('quantity').notNull(),
     unitPrice: numeric('unit_price', { precision: 10, scale: 2 }).notNull(), // price snapshot
     totalPrice: numeric('total_price', { precision: 10, scale: 2 }).notNull(),
@@ -109,4 +115,5 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
     order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
     product: one(products, { fields: [orderItems.productId], references: [products.id] }),
+    variant: one(productVariants, { fields: [orderItems.variantId], references: [productVariants.id] }),
 }));

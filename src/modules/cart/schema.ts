@@ -1,10 +1,13 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const AddCartItemSchema = z.object({
-    productId: z.string().uuid(),
-    quantity: z.number().int().positive(),
+    variantId: z.string().uuid("variantId is required"),
+    quantity: z.number().int().positive("quantity must be a positive integer"),
 });
 
 export const UpdateCartItemSchema = z.object({
-    quantity: z.number().int().positive(),
+    quantity: z.number().int().positive("quantity must be a positive integer"),
 });
+
+export type AddCartItem = z.infer<typeof AddCartItemSchema>;
+export type UpdateCartItem = z.infer<typeof UpdateCartItemSchema>;

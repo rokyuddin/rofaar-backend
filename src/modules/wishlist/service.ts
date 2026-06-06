@@ -3,9 +3,22 @@ import { db } from '@/config/db.js';
 import { wishlistItems } from '@/db/schema/wishlist.js';
 import { cartItems } from '@/db/schema/cart.js';
 import { products } from '@/db/schema/product.js';
+import { productVariants } from '@/db/schema/productVariant.js';
 import { NotFoundError, BadRequestError } from '@/shared/errors.js';
 
 export class WishlistService {
+    /**
+     * Resolve the default variant for a product. Used by moveToCart because
+     * cart_items.variant_id is strictly required.
+     */
+    private async getDefaultVariant(productId: string, tx: any = db) {
+        const v = await tx.query.productVariants.findFirst({
+            where: and(eq(productVariants.productId, productId), eq(productVariants.isDefault, true)),
+        });
+        if (!v) throw new BadRequestError(`No default variant found for product ${productId}`);
+        return v;
+    }
+
     async get(userId: string) {
         return db.query.wishlistItems.findMany({
             where: eq(wishlistItems.userId, userId),
@@ -42,19 +55,31 @@ export class WishlistService {
             if (!product) throw new NotFoundError('Product');
             if (product.stock < 1) throw new BadRequestError('Insufficient stock');
 
-            // Add to cart
-            await tx
-                .insert(cartItems)
-                .values({
+            const variant = await this.getDefaultVariant(productId, tx);
+            const price = (variant.salePrice ?? variant.basePrice).toString();
+
+            // Add to cart (upsert by userId+variantId)
+            const existing = await tx.query.cartItems.findFirst({
+                where: and(eq(cartItems.userId, userId), eq(cartItems.variantId, variant.id)),
+            });
+            if (existing) {
+                await tx
+                    .update(cartItems)
+                    .set({
+                        quantity: sql`${cartItems.quantity} + 1`,
+                        price,
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(cartItems.id, existing.id));
+            } else {
+                await tx.insert(cartItems).values({
                     userId,
                     productId,
+                    variantId: variant.id,
                     quantity: 1,
-                    price: product.price,
-                })
-                .onConflictDoUpdate({
-                    target: [cartItems.userId, cartItems.productId],
-                    set: { quantity: sql`${cartItems.quantity} + 1`, price: product.price },
+                    price,
                 });
+            }
 
             // Remove from wishlist
             await tx
@@ -72,18 +97,29 @@ export class WishlistService {
 
             for (const item of items) {
                 if (item.product.stock >= 1) {
-                    await tx
-                        .insert(cartItems)
-                        .values({
+                    const variant = await this.getDefaultVariant(item.productId, tx);
+                    const price = (variant.salePrice ?? variant.basePrice).toString();
+                    const existing = await tx.query.cartItems.findFirst({
+                        where: and(eq(cartItems.userId, userId), eq(cartItems.variantId, variant.id)),
+                    });
+                    if (existing) {
+                        await tx
+                            .update(cartItems)
+                            .set({
+                                quantity: sql`${cartItems.quantity} + 1`,
+                                price,
+                                updatedAt: new Date(),
+                            })
+                            .where(eq(cartItems.id, existing.id));
+                    } else {
+                        await tx.insert(cartItems).values({
                             userId,
                             productId: item.productId,
+                            variantId: variant.id,
                             quantity: 1,
-                            price: item.product.price,
-                        })
-                        .onConflictDoUpdate({
-                            target: [cartItems.userId, cartItems.productId],
-                            set: { quantity: sql`${cartItems.quantity} + 1`, price: item.product.price },
+                            price,
                         });
+                    }
                 }
             }
 

@@ -17,7 +17,7 @@ Step-by-step reference for store operators and administrators. Requires an accou
 4. [Products](#4-products)
 5. [Categories & brands](#5-categories--brands)
 6. [Marketing (banners & ads)](#6-marketing-banners--ads)
-7. [Inventory](#7-inventory)
+7. [Warehouses & inventory](#7-warehouses--inventory)
 8. [Shipping](#8-shipping)
 9. [Coupons](#9-coupons)
 10. [Orders (fulfillment)](#10-orders-fulfillment)
@@ -277,10 +277,19 @@ Prefix: `/admin/products`.
 
 **Guard:** `authenticate` + `requirePermission(action, "products")`.
 
+The catalog supports two product types:
+
+| Type | `hasVariants` | Behavior |
+|------|---------------|----------|
+| Simple | `false` | One auto-generated default variant. `price` and `stock` mirror the variant. |
+| Variable | `true` | One or more variants with optional attribute combinations (e.g. Color/Size). |
+
+Visibility is controlled by `status` (`draft`, `published`, `archived`) — public storefront routes only return `status='published'`.
+
 ### List Products
 
 ```http
-GET /admin/products?page=1&limit=10&search=shirt&categoryId=<uuid>&sort=newest&isActive=true
+GET /admin/products?page=1&limit=10&search=shirt&categoryId=<uuid>&status=published&hasVariants=true&sort=newest
 ```
 
 **Query params:**
@@ -293,10 +302,11 @@ GET /admin/products?page=1&limit=10&search=shirt&categoryId=<uuid>&sort=newest&i
 | `brand` | uuid | Optional filter by brand |
 | `minPrice` | number | Optional min price |
 | `maxPrice` | number | Optional max price |
-| `isActive` | string | `"true"` or `"false"` |
+| `status` | string | `draft`, `published`, `archived` |
+| `hasVariants` | string | `"true"` or `"false"` |
 | `sort` | string | `newest`, `price-low`, `price-high`, `popular` (default `newest`) |
 
-**Response:** `200` — Paginated product list.
+**Response:** `200` — Paginated product list. See [Product response shape](#product-response-shape) below.
 
 ### Create Product
 
@@ -306,22 +316,30 @@ Authorization: Bearer <token>
 Content-Type: multipart/form-data
 ```
 
-**Fields:**
-| Field | Type | Required |
-|-------|------|----------|
-| `name` | string | Yes |
-| `slug` | string | Yes |
-| `description` | string | Yes (min 4) |
-| `price` | number | Yes (positive) |
-| `costPrice` | number | Yes (positive) |
-| `discountPercentage` | number | 0-100, default 0 |
-| `stock` | number | Yes (≥0) |
-| `isActive` | boolean | Default true |
-| `categoryId` | uuid | Yes |
-| `brandId` | uuid | Yes |
-| `files` | file(s) | Image uploads (jpeg/png/webp, max 5MB each) |
+**Multipart fields (booleans: `"true"`/`"false"`; numbers: numeric strings; complex: JSON-stringified):**
 
-**Response:** `201` — Created product object.
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `name` | string | Yes | 1–256 chars |
+| `slug` | string | Yes | unique |
+| `description` | string | Yes | min 4 chars |
+| `status` | string | No | `draft` (default), `published`, `archived` |
+| `hasVariants` | boolean | No | Default `false` |
+| `freeShipping` | boolean | No | Default `false` |
+| `price` | number | If `hasVariants=false` | positive; seeds the auto-default variant |
+| `costPrice` | number | If `hasVariants=false` | positive |
+| `discountPercentage` | number | No | 0–100, default 0 |
+| `stock` | number | If `hasVariants=false` | ≥ 0; seeds the auto-default variant |
+| `weight` | number | No | grams |
+| `length`, `width`, `height` | number | No | cm |
+| `categoryId` | uuid | Yes | |
+| `brandId` | uuid | Yes | |
+| `images` | string (JSON array) | No | e.g. `["https://.../a.jpg","https://.../b.jpg"]` |
+| `variants` | string (JSON array) | If `hasVariants=true` | see [Variant payload](#variant-payload) |
+| `specs` | string (JSON array) | No | see [Spec payload](#spec-payload) |
+| `files` | file(s) | No | jpeg/png/webp, max 5MB each (one or more file fields) |
+
+**Response:** `201` — Created product object (see shape below).
 
 ### Update Product
 
@@ -331,7 +349,7 @@ Authorization: Bearer <token>
 Content-Type: multipart/form-data
 ```
 
-Same fields as Create, all optional. `images` field (JSON string) for existing image metadata. `files` for new uploads.
+Same fields as Create, all optional. `images` (JSON-stringified array of URLs) for existing images; `files` for new uploads. Variants are replaced (not merged) — pass the full desired list each time.
 
 ### Delete Product
 
@@ -341,6 +359,118 @@ Authorization: Bearer <token>
 ```
 
 **Response:** `200` — `{ "success": true, "message": "Product deleted" }`
+
+### Product response shape
+
+The same shape is returned by both admin and public endpoints. It varies by `hasVariants`:
+
+**`hasVariants: false`** — single auto-default variant. The first image is marked `isPrimary` (sorted by `sortOrder` ascending).
+
+```json
+{
+  "id": "uuid",
+  "name": "Cotton T-Shirt",
+  "slug": "cotton-tshirt",
+  "description": "100% cotton",
+  "status": "published",
+  "hasVariants": false,
+  "freeShipping": false,
+  "price": 100,
+  "salePrice": null,
+  "stock": 7,
+  "inStock": true,
+  "finalPrice": 100,
+  "discountPercentage": 0,
+  "defaultVariant": {
+    "variant_id": "uuid",
+    "sku": "TSHIRT-001",
+    "base_price": 100,
+    "sale_price": null,
+    "stock": 7
+  },
+  "variants": [],
+  "priceRange": null,
+  "defaultVariantId": null,
+  "attributes": [],
+  "images": [
+    { "url": "https://r2.../a.webp", "sortOrder": 0, "isPrimary": true }
+  ],
+  "dimensions": { "weight": 200, "length": 30, "width": 20, "height": 2 },
+  "category": { "id": "uuid", "name": "Clothing" },
+  "brand": { "id": "uuid", "name": "Acme", "logoUrl": "https://..." }
+}
+```
+
+**`hasVariants: true`** — full variants list + price range.
+
+```json
+{
+  "id": "uuid",
+  "name": "Cotton T-Shirt",
+  "...": "...",
+  "hasVariants": true,
+  "price": 0,
+  "salePrice": null,
+  "stock": 18,
+  "inStock": true,
+  "defaultVariantId": "uuid",
+  "defaultVariant": null,
+  "variants": [
+    {
+      "id": "uuid",
+      "sku": "TSHIRT-RED-S",
+      "name": "Red / S",
+      "basePrice": 80,
+      "salePrice": null,
+      "stock": 5,
+      "isDefault": true,
+      "isActive": true,
+      "isLocked": true,
+      "sortOrder": 0,
+      "effectivePrice": 80,
+      "finalPrice": 80,
+      "inStock": true,
+      "attributes": [
+        { "name": "Color", "value": "Red", "hex": "#E24B4A" }
+      ]
+    }
+  ],
+  "priceRange": { "min": 50, "max": 100 }
+}
+```
+
+> `isLocked: true` means the variant was auto-created for a simple product and cannot be edited or deleted via the variant routes (edit the product instead).
+
+#### Variant payload
+
+`variants` (create/update) — JSON array, each item:
+
+```json
+{
+  "sku": "TSHIRT-RED-S",
+  "name": "Red / S",
+  "basePrice": 80,
+  "salePrice": 70,
+  "stock": 10,
+  "isDefault": true,
+  "isActive": true,
+  "sortOrder": 0,
+  "attributeValueIds": ["uuid-of-red-value", "uuid-of-s-value"]
+}
+```
+
+Exactly one variant per product should have `isDefault: true`; if none is supplied, the first item becomes default.
+
+#### Spec payload
+
+`specs` — JSON array of product-level specs (Material, Warranty, etc. — not the variant options):
+
+```json
+[
+  { "name": "Material", "value": "100% Cotton", "sortOrder": 0 },
+  { "name": "Warranty", "value": "1 year", "sortOrder": 1 }
+]
+```
 
 ### List Product Images
 
@@ -357,8 +487,8 @@ Returns all images for a product, sorted by sort order.
 {
   "success": true,
   "data": [
-    { "id": "uuid", "productId": "uuid", "url": "https://...", "sortOrder": 0 },
-    { "id": "uuid", "productId": "uuid", "url": "https://...", "sortOrder": 1 }
+    { "id": "uuid", "productId": "uuid", "url": "https://...", "sortOrder": 0, "isPrimary": true },
+    { "id": "uuid", "productId": "uuid", "url": "https://...", "sortOrder": 1, "isPrimary": false }
   ]
 }
 ```
@@ -373,24 +503,14 @@ Content-Type: application/json
 {
   "images": [
     { "imageId": "uuid-of-image", "sortOrder": 0 },
-    { "imageId": "uuid-of-another-image", "sortOrder": 1 }
+    { "imageId": "uuid-of-another", "sortOrder": 1 }
   ]
 }
 ```
 
-Changes the display order of a product's images. The `sortOrder` is 0-based. All image IDs must belong to the specified product.
+Changes the display order of a product's images. The `sortOrder` is 0-based. All image IDs must belong to the specified product. The first image (`sortOrder=0`) is treated as primary.
 
-**Success Response (200):**
-
-```json
-{
-  "success": true,
-  "data": [
-    { "id": "uuid", "productId": "uuid", "url": "https://...", "sortOrder": 0 },
-    { "id": "uuid", "productId": "uuid", "url": "https://...", "sortOrder": 1 }
-  ]
-}
-```
+**Success Response (200):** Reordered image list.
 
 ### Upload Product Images
 
@@ -402,19 +522,7 @@ Content-Type: multipart/form-data
 file=@image1.jpg   (one or more file fields)
 ```
 
-Uploads one or more images to an existing product. Images are appended to the current set with auto-incrementing sort order. Accepted types: `image/jpeg`, `image/png`, `image/webp`. Max file size: 5MB per image.
-
-**Success Response (201):**
-
-```json
-{
-  "success": true,
-  "data": [
-    { "id": "uuid", "productId": "uuid", "url": "https://r2.dev/...", "sortOrder": 3 },
-    { "id": "uuid", "productId": "uuid", "url": "https://r2.dev/...", "sortOrder": 4 }
-  ]
-}
-```
+Appends new images to the product with auto-incrementing `sortOrder`. Accepted types: `image/jpeg`, `image/png`, `image/webp`. Max file size: 5MB per image.
 
 ### Delete Product Image
 
@@ -423,19 +531,87 @@ DELETE /admin/products/:id/images/:imageId
 Authorization: Bearer <token>
 ```
 
-Deletes a single image from a product. If the image was uploaded to R2, the file is also removed. Returns the remaining images.
+Removes the image row and deletes the underlying R2 file. Returns the remaining images.
 
-**Success Response (200):**
+### Variants (admin)
+
+Prefix: `/admin/products/:id/variants`. **Guard:** `requirePermission(action, "products")`.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/admin/products/:id/variants` | All variants (active + inactive) |
+| POST | `/admin/products/:id/variants` | `CreateVariantSchema`. If the product has no variants yet, this one is auto-default. |
+| GET | `/admin/products/:id/variants/:variantId` | Single variant |
+| PUT | `/admin/products/:id/variants/:variantId` | `UpdateVariantSchema`. Locked variants (auto-default for `hasVariants=false`) cannot be edited. |
+| DELETE | `/admin/products/:id/variants/:variantId` | Locked/default variants cannot be deleted. |
+| PUT | `/admin/products/:id/variants/:variantId/attributes` | Replace the variant's attribute values |
+
+**`CreateVariantSchema`:**
 
 ```json
 {
-  "success": true,
-  "data": [
-    { "id": "uuid", "productId": "uuid", "url": "https://...", "sortOrder": 0 },
-    { "id": "uuid", "productId": "uuid", "url": "https://...", "sortOrder": 1 }
+  "sku*": "TSHIRT-RED-S",
+  "name*": "Red / S",
+  "basePrice*": 80,
+  "salePrice": 70,
+  "stock": 10,
+  "isDefault": false,
+  "isActive": true,
+  "sortOrder": 0,
+  "attributeValueIds": ["uuid"]
+}
+```
+
+**Replace variant attributes:**
+
+```http
+PUT /admin/products/:id/variants/:variantId/attributes
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{ "attributeValueIds": ["uuid-red", "uuid-s"] }
+```
+
+### Attributes (admin)
+
+Prefix: `/admin/products/:id/attributes`. **Guard:** `requirePermission(action, "products")`.
+
+Use this to manage variant **options** (e.g. Color with values Red/Blue, Size with values S/M/L). Each value can carry a `metadata` jsonb (e.g. `{ "hex": "#E24B4A" }`) which is merged into the variant response.
+
+| Method | Path | Body |
+|--------|------|------|
+| GET | `/admin/products/:id/attributes` | – |
+| POST | `/admin/products/:id/attributes` | `{ name*, slug?, sortOrder?, values: [{ value*, slug?, metadata?, sortOrder? }] }` (≥1 value) |
+| PUT | `/admin/products/:id/attributes/:attributeId` | `{ name?, slug?, sortOrder? }` |
+| DELETE | `/admin/products/:id/attributes/:attributeId` | Cascades to its values and detach variants |
+| POST | `/admin/products/:id/attributes/:attributeId/values` | `{ value*, slug?, metadata?, sortOrder? }` |
+| DELETE | `/admin/products/:id/attributes/:attributeId/values/:valueId` | Detaches variants that used it |
+
+**Create example:**
+
+```json
+{
+  "name": "Color",
+  "slug": "color",
+  "values": [
+    { "value": "Red",  "metadata": { "hex": "#E24B4A" } },
+    { "value": "Blue", "metadata": { "hex": "#2A6BD8" } }
   ]
 }
 ```
+
+### Specs (admin)
+
+Prefix: `/admin/products/:id/specs`. **Guard:** `requirePermission(action, "products")`.
+
+Product-level specs (e.g. Material, Warranty) — distinct from variant attribute options.
+
+| Method | Path | Body |
+|--------|------|------|
+| GET | `/admin/products/:id/specs` | – |
+| POST | `/admin/products/:id/specs` | `{ name*, value*, sortOrder? }` |
+| PUT | `/admin/products/:id/specs/:specId` | `{ name?, value?, sortOrder? }` |
+| DELETE | `/admin/products/:id/specs/:specId` | – |
 
 ### Bulk Import Products
 
@@ -447,7 +623,7 @@ Content-Type: multipart/form-data
 file=@products.csv   (or products.xlsx)
 ```
 
-Upload a CSV or XLSX file to create up to 500 products at once. Stops on the first invalid row and returns row-level error details so the admin can fix and retry. Categories and brands are looked up by UUID; the first 7 columns are required.
+Upload a CSV or XLSX file to create up to **500** products at once. Max file size **10MB**. Stops on the first invalid row and returns row-level error details so the admin can fix and retry. Categories and brands are looked up by UUID; the first 7 columns are required.
 
 **Required columns (header row):**
 
@@ -462,8 +638,11 @@ Upload a CSV or XLSX file to create up to 500 products at once. Stops on the fir
 | `brandId` | UUID | must exist in `brands` |
 | `discountPercentage` | number | 0–100 (default 0) |
 | `stock` | integer | ≥ 0 (default 0) |
-| `isActive` | boolean | `true`/`false` (default `true`) |
 | `images` | JSON array string | optional, e.g. `["https://.../a.jpg"]` |
+| `status` | string | `draft` (default), `published`, `archived` |
+| `hasVariants` | boolean | optional, default `false` |
+| `freeShipping` | boolean | optional, default `false` |
+| `weight`, `length`, `width`, `height` | number | optional, dimensions (grams/cm) |
 
 **Success response (`200`):**
 
@@ -511,11 +690,17 @@ Prefix: `/admin/categories`.
 
 **Guard:** `authenticate` + `requirePermission(action, "categories")`.
 
+Categories are self-referential: a category can have a `parentId` pointing to another category. The server builds a denormalized `path` string (`"Parent/Child"`) for fast prefix queries and **rebases the entire subtree** whenever a category's slug or parent changes (32-level recursion cap to defend against corrupted data).
+
 #### List Categories
 
 ```http
-GET /admin/categories?page=1&limit=10&search=clothing&isActive=true
+GET /admin/categories?page=1&limit=10&search=clothing&isActive=true&parentId=<uuid>
 ```
+
+| Query | Type | Description |
+|-------|------|-------------|
+| `parentId` | uuid or `"null"` | Filter by parent. Use `"null"` to list root categories. |
 
 #### Create Category
 
@@ -530,6 +715,8 @@ Content-Type: multipart/form-data
 | `name` | string | Yes |
 | `slug` | string | Yes |
 | `description` | string | No |
+| `parentId` | uuid | No — parent category id (omit for a root) |
+| `isActive` | boolean | Default true |
 | `imageFile` | file | Image (jpeg/png/webp, max 2MB) |
 
 #### Update Category
@@ -540,7 +727,7 @@ Authorization: Bearer <token>
 Content-Type: multipart/form-data
 ```
 
-Same fields as Create, all optional.
+Same fields as Create, all optional. Changing `slug` or `parentId` triggers a subtree rebase — children keep their relative slugs. Setting `parentId` to the category's own id is rejected with `400`.
 
 #### Delete Category
 
@@ -548,6 +735,8 @@ Same fields as Create, all optional.
 DELETE /admin/categories/:id
 Authorization: Bearer <token>
 ```
+
+On delete, the FK uses `ON DELETE SET NULL` so children are preserved as roots.
 
 ---
 
@@ -700,11 +889,57 @@ Authorization: Bearer <token>
 
 ---
 
-## 7. Inventory
+## 7. Warehouses & inventory
+
+Stock is tracked per **variant × warehouse**. Orders auto-pick a warehouse via `pickWarehouseForDeduction` (warehouse with the most stock that can cover the quantity; falls back to the first active warehouse). Order fulfill and restock write a log row with `type='order_deduction'` or `'return_restock'`; manual corrections use the other types.
+
+### Warehouses
+
+Prefix: `/admin/warehouses`.
+
+**Guard:** `authenticate` + `requirePermission(action, "warehouses")`.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/admin/warehouses` | `?page&limit&isActive&search` |
+| POST | `/admin/warehouses` | Create (code must be unique) |
+| GET | `/admin/warehouses/:id` | Single warehouse |
+| PUT | `/admin/warehouses/:id` | Partial update |
+| DELETE | `/admin/warehouses/:id` | Refused (`400`) if any inventory rows exist for this warehouse |
+| GET | `/admin/warehouses/:id/inventory` | `?limit&offset` — inventory rows in this warehouse |
+| PUT | `/admin/warehouses/:id/inventory/:variantId` | Set absolute stock (upsert) |
+
+**Create warehouse body:**
+
+```json
+{
+  "name": "Dhaka Central",
+  "code": "DHK-01",
+  "address": "123 Warehouse Rd",
+  "isActive": true
+}
+```
+
+`code` is `^[A-Z0-9-]+$`, unique across warehouses.
+
+**Set stock body:**
+
+```json
+{ "quantity": 50, "lowStockThreshold": 5 }
+```
+
+### Inventory
 
 Prefix: `/admin/inventory`.
 
 **Guard:** `authenticate` + `adminOnly`.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/admin/inventory/list` | `?warehouseId&limit&offset` — all inventory rows (with variant + warehouse) |
+| GET | `/admin/inventory/low-stock` | `?warehouseId&limit (≤200, default 50)` — at or below `lowStockThreshold` |
+| POST | `/admin/inventory/adjust` | Adjust stock + write a log row |
+| GET | `/admin/inventory/logs` | `?productId` — legacy log feed (full stock-change history) |
 
 ### Adjust stock
 
@@ -715,34 +950,88 @@ Content-Type: application/json
 ```
 
 **Body:**
+
 ```json
 {
-  "productId": "uuid",
+  "variantId": "uuid",
+  "warehouseId": "uuid",
   "quantityChange": 10,
   "type": "stock_increase",
-  "note": "Restock from supplier"
+  "note": "Restock from supplier",
+  "reason": "PO-2026-001",
+  "performedBy": "user-uuid"
 }
 ```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `variantId` | uuid | Yes | |
+| `warehouseId` | uuid | No | Omit to adjust at the global variant level (no warehouse) |
+| `quantityChange` | integer | Yes | Non-zero. Positive to add, negative to remove. |
+| `type` | enum | Yes | see below |
+| `note` | string | No | Free-form comment |
+| `reason` | string | No | Business reason (PO, audit, etc.) |
+| `performedBy` | uuid | No | Staff user id |
 
 | `type` | Use case |
 |--------|----------|
 | `stock_increase` | Manual add |
 | `stock_decrease` | Manual remove |
 | `manual_adjustment` | Correction |
+| `order_deduction` | Written automatically by the order pipeline |
+| `return_restock` | Written automatically on order return / cancel / delete |
+
+`stockAfter` is auto-computed from the inventory row and included in the log.
 
 **Response:** `200`
+
 ```json
 {
   "success": true,
   "data": {
     "id": "uuid",
-    "productId": "uuid",
+    "variantId": "uuid",
+    "warehouseId": "uuid",
     "type": "stock_increase",
     "quantityChange": 10,
     "stockAfter": 60,
     "note": "Restock from supplier",
-    "createdAt": "2025-01-01T00:00:00.000Z"
+    "reason": "PO-2026-001",
+    "performedBy": "user-uuid",
+    "createdAt": "2026-01-01T00:00:00.000Z"
   }
+}
+```
+
+### Low stock alert
+
+```http
+GET /admin/inventory/low-stock?warehouseId=<uuid>&limit=50
+```
+
+Returns inventory rows where `quantity <= lowStockThreshold`. Default `limit=50`, max 200. Each row includes the variant (with its product) and warehouse.
+
+**Response:** `200`
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "variantId": "uuid",
+      "warehouseId": "uuid",
+      "quantity": 3,
+      "lowStockThreshold": 5,
+      "variant": {
+        "id": "uuid",
+        "sku": "TSHIRT-RED-S",
+        "basePrice": "80.00",
+        "stock": 3,
+        "product": { "id": "uuid", "name": "Cotton T-Shirt", "slug": "cotton-tshirt" }
+      },
+      "warehouse": { "id": "uuid", "name": "Dhaka Central", "code": "DHK-01" }
+    }
+  ]
 }
 ```
 
@@ -750,12 +1039,12 @@ Content-Type: application/json
 
 ```http
 GET /admin/inventory/logs?productId=<uuid>
-Authorization: Bearer <token>
 ```
 
-Optional `productId` to filter by product.
+Returns the full stock-change history with the associated variant, warehouse, and product.
 
 **Response:** `200`
+
 ```json
 {
   "success": true,
@@ -763,29 +1052,14 @@ Optional `productId` to filter by product.
     {
       "id": "uuid",
       "productId": "uuid",
+      "variantId": "uuid",
+      "warehouseId": "uuid",
       "type": "order_deduction",
       "quantityChange": -2,
       "stockAfter": 58,
       "note": "Order #123",
-      "createdAt": "2025-01-01T00:00:00.000Z"
+      "createdAt": "2026-01-01T00:00:00.000Z"
     }
-  ]
-}
-```
-
-### Low stock alert
-
-```http
-GET /admin/inventory/low-stock
-Authorization: Bearer <token>
-```
-
-**Response:** `200`
-```json
-{
-  "success": true,
-  "data": [
-    { "id": "uuid", "name": "Cotton T-Shirt", "stock": 5 }
   ]
 }
 ```
@@ -982,6 +1256,8 @@ Prefix: `/admin/orders`.
 
 **Guard:** `authenticate` + per-route `requirePermission`.
 
+> **Variant & inventory behavior:** Each `order_items` row is **locked to a specific variant** (`variantId`, nullable, `ON DELETE SET NULL`). The `variantName` and `variantSku` columns are denormalized snapshots so the receipt survives variant deletion. On order creation, the order pipeline picks a warehouse via `pickWarehouseForDeduction` (most stock that can cover the quantity) and writes a `type='order_deduction'` log row. `return`, `cancel`, and `delete` restock the chosen warehouse and write a `type='return_restock'` log row. The denormalized `product_variants.stock` column is also updated.
+
 ### List orders
 
 ```http
@@ -1046,7 +1322,18 @@ Includes user, items with products, address, coupon.
     "status": "pending",
     "total": "1500.00",
     "items": [
-      { "productId": "uuid", "quantity": 2, "totalPrice": "1500.00", "product": { "name": "..." } }
+      {
+        "id": "uuid",
+        "productId": "uuid",
+        "variantId": "uuid",
+        "variantName": "Red / S",
+        "variantSku": "TSHIRT-RED-S",
+        "quantity": 2,
+        "unitPrice": "750.00",
+        "totalPrice": "1500.00",
+        "product": { "id": "uuid", "name": "Cotton T-Shirt", "slug": "cotton-tshirt" },
+        "variant": { "id": "uuid", "sku": "TSHIRT-RED-S", "name": "Red / S" }
+      }
     ],
     "address": { "recipientName": "...", "phone": "...", "address": "..." },
     "coupon": { "code": "..." },
@@ -1470,6 +1757,7 @@ Authorization: Bearer <token>
 | `users` | read, update |
 | `contacts` | read, update, delete |
 | `shipping` | create, read, update, delete |
+| `warehouses` | create, read, update, delete |
 
 Routes using `adminOnly` (dashboard, inventory, shipping, Steadfast, users) require `admin` or `super_admin` role name — operators cannot access these unless promoted.
 
@@ -1876,7 +2164,7 @@ Single file upload to Cloudflare R2.
 
 ### Low stock
 
-1. `GET /admin/inventory/low-stock`
+1. `GET /admin/inventory/low-stock?warehouseId=<uuid>` (filtered by warehouse, optional)
 2. `POST /admin/inventory/adjust` — restock
 3. Optionally update product via `PUT /admin/products/:id`
 
@@ -1885,6 +2173,7 @@ Single file upload to Cloudflare R2.
 1. `GET /admin/refunds`
 2. Review order via `GET /admin/orders/:id`
 3. `PATCH /admin/refunds/:id/approve` or `reject`
+4. The order `return` action restocks inventory and writes a `return_restock` log row
 
 ### Daily dashboard check
 
@@ -1919,6 +2208,22 @@ Single file upload to Cloudflare R2.
 | 14d | Products | POST | `/admin/products/:id/images` |
 | 14e | Products | PUT | `/admin/products/:id/images/sort` |
 | 14f | Products | DELETE | `/admin/products/:id/images/:imageId` |
+| 14g | Variants | GET | `/admin/products/:id/variants` |
+| 14h | Variants | POST | `/admin/products/:id/variants` |
+| 14i | Variants | GET | `/admin/products/:id/variants/:variantId` |
+| 14j | Variants | PUT | `/admin/products/:id/variants/:variantId` |
+| 14k | Variants | DELETE | `/admin/products/:id/variants/:variantId` |
+| 14l | Variants | PUT | `/admin/products/:id/variants/:variantId/attributes` |
+| 14m | Attributes | GET | `/admin/products/:id/attributes` |
+| 14n | Attributes | POST | `/admin/products/:id/attributes` |
+| 14o | Attributes | PUT | `/admin/products/:id/attributes/:attributeId` |
+| 14p | Attributes | DELETE | `/admin/products/:id/attributes/:attributeId` |
+| 14q | Attributes | POST | `/admin/products/:id/attributes/:attributeId/values` |
+| 14r | Attributes | DELETE | `/admin/products/:id/attributes/:attributeId/values/:valueId` |
+| 14s | Specs | GET | `/admin/products/:id/specs` |
+| 14t | Specs | POST | `/admin/products/:id/specs` |
+| 14u | Specs | PUT | `/admin/products/:id/specs/:specId` |
+| 14v | Specs | DELETE | `/admin/products/:id/specs/:specId` |
 | 15 | Categories | GET | `/admin/categories` |
 | 16 | Categories | POST | `/admin/categories` |
 | 17 | Categories | PUT | `/admin/categories/:id` |
@@ -1935,74 +2240,82 @@ Single file upload to Cloudflare R2.
 | 28 | Ads | POST | `/admin/advertisements` |
 | 29 | Ads | PUT | `/admin/advertisements/:id` |
 | 30 | Ads | DELETE | `/admin/advertisements/:id` |
-| 31 | Inventory | POST | `/admin/inventory/adjust` |
-| 32 | Inventory | GET | `/admin/inventory/logs` |
-| 33 | Inventory | GET | `/admin/inventory/low-stock` |
-| 34 | Shipping | POST | `/admin/shipping/zones` |
-| 35 | Shipping | PUT | `/admin/shipping/zones/:id` |
-| 36 | Shipping | DELETE | `/admin/shipping/zones/:id` |
-| 37 | Shipping | POST | `/admin/shipping/methods` |
-| 38 | Shipping | PUT | `/admin/shipping/methods/:id` |
-| 39 | Shipping | DELETE | `/admin/shipping/methods/:id` |
-| 40 | Coupons | GET | `/admin/coupons` |
-| 41 | Coupons | POST | `/admin/coupons` |
-| 42 | Coupons | PUT | `/admin/coupons/:id` |
-| 43 | Coupons | DELETE | `/admin/coupons/:id` |
-| 44 | Orders | GET | `/admin/orders` |
-| 45 | Orders | GET | `/admin/orders/user/:id` |
-| 46 | Orders | GET | `/admin/orders/:id` |
-| 47 | Orders | PATCH | `/admin/orders/:id/status` |
-| 48 | Orders | PATCH | `/admin/orders/:id/payment-status` |
-| 49 | Orders | PATCH | `/admin/orders/:id/confirm` |
-| 50 | Orders | PATCH | `/admin/orders/:id/process` |
-| 51 | Orders | PATCH | `/admin/orders/:id/ship` |
-| 52 | Orders | PATCH | `/admin/orders/:id/deliver` |
-| 53 | Orders | PATCH | `/admin/orders/:id/mark-paid` |
-| 54 | Orders | PATCH | `/admin/orders/:id/return` |
-| 55 | Orders | PATCH | `/admin/orders/:id/cancel` |
-| 56 | Orders | PATCH | `/admin/orders/:id/cancel-request/approve` |
-| 57 | Orders | PATCH | `/admin/orders/:id/cancel-request/reject` |
-| 58 | Orders | DELETE | `/admin/orders/:id` |
-| 59 | Refunds | GET | `/admin/refunds` |
-| 60 | Refunds | PATCH | `/admin/refunds/:id/approve` |
-| 61 | Refunds | PATCH | `/admin/refunds/:id/reject` |
-| 62 | Users | GET | `/admin/users` |
-| 63 | Users | GET | `/admin/users/:id` |
-| 64 | Users | PUT | `/admin/users/:id` |
-| 65 | Users | DELETE | `/admin/users/:id` |
-| 66 | RBAC | GET | `/admin/rbac/roles` |
-| 67 | RBAC | GET | `/admin/rbac/roles/:id` |
-| 68 | RBAC | POST | `/admin/rbac/roles` |
-| 69 | RBAC | PUT | `/admin/rbac/roles/:id` |
-| 70 | RBAC | DELETE | `/admin/rbac/roles/:id` |
-| 71 | RBAC | GET | `/admin/rbac/permissions` |
-| 72 | RBAC | POST | `/admin/rbac/permissions` |
-| 73 | RBAC | DELETE | `/admin/rbac/permissions/:id` |
-| 74 | RBAC | PUT | `/admin/rbac/roles/:id/permissions` |
-| 75 | RBAC | DELETE | `/admin/rbac/roles/:roleId/permissions/:permissionId` |
-| 76 | Reviews | GET | `/admin/reviews` |
-| 77 | Reviews | DELETE | `/admin/reviews/:id` |
-| 78 | Contacts | GET | `/admin/contact` |
-| 79 | Contacts | PATCH | `/admin/contact/:id/status` |
-| 80 | Contacts | DELETE | `/admin/contact/:id` |
-| 81 | Q&A | POST | `/admin/qa/answer` |
-| 82 | Cart | GET | `/admin/cart/user/:id` |
-| 83 | Cart | DELETE | `/admin/cart/user/:id` |
-| 84 | Cart | PUT | `/admin/cart/user/:userId/update/:id` |
-| 85 | Steadfast | POST | `/admin/steadfast/orders/:id/send` |
-| 86 | Steadfast | GET | `/admin/steadfast/balance` |
-| 87 | Steadfast | GET | `/admin/steadfast/tracking/:trackingCode` |
-| 88 | Steadfast | GET | `/admin/steadfast/status/invoice/:invoice` |
-| 89 | Steadfast | GET | `/admin/steadfast/status/consignment/:id` |
-| 90 | Steadfast | POST | `/admin/steadfast/bulk-send` |
-| 91 | Steadfast | POST | `/admin/steadfast/return-request` |
-| 92 | Steadfast | GET | `/admin/steadfast/return-requests` |
-| 93 | Steadfast | GET | `/admin/steadfast/return-requests/:id` |
-| 94 | Steadfast | GET | `/admin/steadfast/payments` |
-| 95 | Steadfast | GET | `/admin/steadfast/payments/:id` |
-| 96 | Steadfast | GET | `/admin/steadfast/police-stations` |
-| 97 | Uploads | POST | `/uploads/image` |
+| 31 | Warehouses | GET | `/admin/warehouses` |
+| 32 | Warehouses | POST | `/admin/warehouses` |
+| 33 | Warehouses | GET | `/admin/warehouses/:id` |
+| 34 | Warehouses | PUT | `/admin/warehouses/:id` |
+| 35 | Warehouses | DELETE | `/admin/warehouses/:id` |
+| 36 | Warehouses | GET | `/admin/warehouses/:id/inventory` |
+| 37 | Warehouses | PUT | `/admin/warehouses/:id/inventory/:variantId` |
+| 38 | Inventory | GET | `/admin/inventory/list` |
+| 39 | Inventory | GET | `/admin/inventory/low-stock` |
+| 40 | Inventory | POST | `/admin/inventory/adjust` |
+| 41 | Inventory | GET | `/admin/inventory/logs` |
+| 42 | Shipping | POST | `/admin/shipping/zones` |
+| 43 | Shipping | PUT | `/admin/shipping/zones/:id` |
+| 44 | Shipping | DELETE | `/admin/shipping/zones/:id` |
+| 45 | Shipping | POST | `/admin/shipping/methods` |
+| 46 | Shipping | PUT | `/admin/shipping/methods/:id` |
+| 47 | Shipping | DELETE | `/admin/shipping/methods/:id` |
+| 48 | Coupons | GET | `/admin/coupons` |
+| 49 | Coupons | POST | `/admin/coupons` |
+| 50 | Coupons | PUT | `/admin/coupons/:id` |
+| 51 | Coupons | DELETE | `/admin/coupons/:id` |
+| 52 | Orders | GET | `/admin/orders` |
+| 53 | Orders | GET | `/admin/orders/user/:id` |
+| 54 | Orders | GET | `/admin/orders/:id` |
+| 55 | Orders | PATCH | `/admin/orders/:id/status` |
+| 56 | Orders | PATCH | `/admin/orders/:id/payment-status` |
+| 57 | Orders | PATCH | `/admin/orders/:id/confirm` |
+| 58 | Orders | PATCH | `/admin/orders/:id/process` |
+| 59 | Orders | PATCH | `/admin/orders/:id/ship` |
+| 60 | Orders | PATCH | `/admin/orders/:id/deliver` |
+| 61 | Orders | PATCH | `/admin/orders/:id/mark-paid` |
+| 62 | Orders | PATCH | `/admin/orders/:id/return` |
+| 63 | Orders | PATCH | `/admin/orders/:id/cancel` |
+| 64 | Orders | PATCH | `/admin/orders/:id/cancel-request/approve` |
+| 65 | Orders | PATCH | `/admin/orders/:id/cancel-request/reject` |
+| 66 | Orders | DELETE | `/admin/orders/:id` |
+| 67 | Refunds | GET | `/admin/refunds` |
+| 68 | Refunds | PATCH | `/admin/refunds/:id/approve` |
+| 69 | Refunds | PATCH | `/admin/refunds/:id/reject` |
+| 70 | Users | GET | `/admin/users` |
+| 71 | Users | GET | `/admin/users/:id` |
+| 72 | Users | PUT | `/admin/users/:id` |
+| 73 | Users | DELETE | `/admin/users/:id` |
+| 74 | RBAC | GET | `/admin/rbac/roles` |
+| 75 | RBAC | GET | `/admin/rbac/roles/:id` |
+| 76 | RBAC | POST | `/admin/rbac/roles` |
+| 77 | RBAC | PUT | `/admin/rbac/roles/:id` |
+| 78 | RBAC | DELETE | `/admin/rbac/roles/:id` |
+| 79 | RBAC | GET | `/admin/rbac/permissions` |
+| 80 | RBAC | POST | `/admin/rbac/permissions` |
+| 81 | RBAC | DELETE | `/admin/rbac/permissions/:id` |
+| 82 | RBAC | PUT | `/admin/rbac/roles/:id/permissions` |
+| 83 | RBAC | DELETE | `/admin/rbac/roles/:roleId/permissions/:permissionId` |
+| 84 | Reviews | GET | `/admin/reviews` |
+| 85 | Reviews | DELETE | `/admin/reviews/:id` |
+| 86 | Contacts | GET | `/admin/contact` |
+| 87 | Contacts | PATCH | `/admin/contact/:id/status` |
+| 88 | Contacts | DELETE | `/admin/contact/:id` |
+| 89 | Q&A | POST | `/admin/qa/answer` |
+| 90 | Cart | GET | `/admin/cart/user/:id` |
+| 91 | Cart | DELETE | `/admin/cart/user/:id` |
+| 92 | Cart | PUT | `/admin/cart/user/:userId/update/:id` |
+| 93 | Steadfast | POST | `/admin/steadfast/orders/:id/send` |
+| 94 | Steadfast | GET | `/admin/steadfast/balance` |
+| 95 | Steadfast | GET | `/admin/steadfast/tracking/:trackingCode` |
+| 96 | Steadfast | GET | `/admin/steadfast/status/invoice/:invoice` |
+| 97 | Steadfast | GET | `/admin/steadfast/status/consignment/:id` |
+| 98 | Steadfast | POST | `/admin/steadfast/bulk-send` |
+| 99 | Steadfast | POST | `/admin/steadfast/return-request` |
+| 100 | Steadfast | GET | `/admin/steadfast/return-requests` |
+| 101 | Steadfast | GET | `/admin/steadfast/return-requests/:id` |
+| 102 | Steadfast | GET | `/admin/steadfast/payments` |
+| 103 | Steadfast | GET | `/admin/steadfast/payments/:id` |
+| 104 | Steadfast | GET | `/admin/steadfast/police-stations` |
+| 105 | Uploads | POST | `/uploads/image` |
 
 ---
 
-*Last updated to match the current `rofaar-backend` route implementation.*
+*Last updated to match the current `rofaar-backend` route implementation (variants, attributes, specs, multi-warehouse inventory).*

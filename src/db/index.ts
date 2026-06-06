@@ -4,6 +4,8 @@ export * from './schema/user';
 export * from './schema/category';
 export * from './schema/tag';
 export * from './schema/product';
+export * from './schema/productVariant';
+export * from './schema/warehouse';
 export * from './schema/cart';
 export * from './schema/address';
 export * from './schema/coupon';
@@ -24,4 +26,3 @@ export * from './schema/product_view';
 export * from './schema/product_qa';
 export * from './schema/session';
 export * from './schema/log';
-

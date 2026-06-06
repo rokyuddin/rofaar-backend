@@ -2,6 +2,8 @@ import { pgTable, uuid, integer, text, timestamp, pgEnum } from 'drizzle-orm/pg-
 import { relations } from 'drizzle-orm';
 import { users } from './user';
 import { products } from './product';
+import { productVariants } from './productVariant';
+import { warehouses } from './warehouse';
 
 export const inventoryLogTypeEnum = pgEnum('inventory_log_type', [
     'stock_increase',
@@ -16,6 +18,8 @@ export const inventoryLogs = pgTable('inventory_logs', {
     productId: uuid('product_id')
         .notNull()
         .references(() => products.id, { onDelete: 'cascade' }),
+    variantId: uuid('variant_id').references(() => productVariants.id, { onDelete: 'set null' }),
+    warehouseId: uuid('warehouse_id').references(() =>warehouses.id, { onDelete: 'set null' }),
     type: inventoryLogTypeEnum('type').notNull(),
     quantityChange: integer('quantity_change').notNull(), // positive = increase, negative = decrease
     stockAfter: integer('stock_after').notNull(),
@@ -26,5 +30,7 @@ export const inventoryLogs = pgTable('inventory_logs', {
 
 export const inventoryLogsRelations = relations(inventoryLogs, ({ one }) => ({
     product: one(products, { fields: [inventoryLogs.productId], references: [products.id] }),
+    variant: one(productVariants, { fields: [inventoryLogs.variantId], references: [productVariants.id] }),
+    warehouse: one(warehouses, { fields: [inventoryLogs.warehouseId], references: [warehouses.id] }),
     performer: one(users, { fields: [inventoryLogs.performedBy], references: [users.id] }),
 }));

@@ -32,7 +32,7 @@ const errorHandlerPlugin: FastifyPluginAsync = async (fastify) => {
 
     fastify.setNotFoundHandler((request, reply) => {
         reply.code(404).send(
-            apiError('NOT_FOUND', `Route ${request.method} ${request.url} not found`),
+            apiError('NOT_FOUND', 'Route not found'),
         );
     });
 };

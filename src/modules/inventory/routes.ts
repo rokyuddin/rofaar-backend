@@ -1,60 +1,38 @@
-import type { FastifyPluginAsync } from 'fastify';
-import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { inventoryService } from './service.js';
-import { AdjustStockSchema } from './schema.js';
-import { z } from 'zod';
+import type { FastifyPluginAsync } from "fastify";
+import type { ZodTypeProvider } from "fastify-type-provider-zod";
+import { inventoryService } from "./service.js";
+import { z } from "zod";
 
+/**
+ * Legacy product-level inventory routes. New code should use the variant +
+ * warehouse routes from /admin/inventory/* (registered by the warehouses
+ * module) and /admin/warehouses/:id/inventory/*.
+ *
+ * Kept for the logs endpoint (read-only) so admins can still view history
+ * with optional product filter.
+ */
 const inventoryRoutes: FastifyPluginAsync = async (fastify) => {
     fastify.register(async (instance) => {
         const app = instance.withTypeProvider<ZodTypeProvider>();
-        app.addHook('onRequest', fastify.authenticate);
-        app.addHook('onRequest', fastify.adminOnly);
+        app.addHook("onRequest", fastify.authenticate);
+        app.addHook("onRequest", fastify.adminOnly);
 
-        app.post('/adjust', {
+        app.get("/logs", {
             schema: {
-                tags: ['Admin | Inventory'],
-                summary: 'Adjust stock level',
-                description: 'Manually increases or decreases the stock level of a product.',
-                body: AdjustStockSchema
-            },
-            handler: async (request, reply) => {
-                const { productId, quantityChange, type, note } = request.body;
-                const log = await inventoryService.adjustStock({
-                    productId,
-                    quantityChange,
-                    type,
-                    performedBy: request.user.id,
-                    ...(note !== undefined ? { note } : {}),
-                });
-                return reply.sendOk(log);
-            },
-        });
-
-        app.get('/logs', {
-            schema: {
-                tags: ['Admin | Inventory'],
-                summary: 'Get inventory logs',
-                description: 'Returns a history of stock adjustments, optionally filtered by product.',
-                querystring: z.object({ productId: z.string().uuid().optional() }),
+                tags: ["Admin | Inventory"],
+                summary: "Get inventory logs",
+                description:
+                    "Returns a history of stock adjustments, optionally filtered by product id. For variant/warehouse-scoped logs, query by product id of the variant's product.",
+                querystring: z.object({
+                    productId: z.string().uuid().optional(),
+                }),
             },
             handler: async (request, reply) => {
                 const logs = await inventoryService.getLogs(request.query.productId);
                 return reply.sendOk(logs);
             },
         });
-
-        app.get('/low-stock', {
-            schema: {
-                tags: ['Admin | Inventory'],
-                summary: 'Get low stock products',
-                description: 'Returns a list of products that are below the low-stock threshold.',
-            },
-            handler: async (_request, reply) => {
-                const products = await inventoryService.getLowStockProducts();
-                return reply.sendOk(products);
-            },
-        });
-    }, { prefix: '/admin/inventory' });
+    }, { prefix: "/admin/inventory" });
 };
 
 export default inventoryRoutes;

@@ -21,6 +21,10 @@ export const AdminCategoryParamsSchema = CategoryParamsSchema.extend({
     .enum(["true", "false"])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === "true")),
+  parentId: z
+    .union([z.string().uuid(), z.literal("null")])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "null" ? null : v)),
 });
 
 export const CreateCategorySchema = z.object({
@@ -28,6 +32,7 @@ export const CreateCategorySchema = z.object({
     slug: z.string().min(1),
     description: z.string().optional(),
     imageUrl: z.string().optional(),
+    parentId: z.string().uuid().optional().nullable(),
 });
 
 export const UpdateCategorySchema = CreateCategorySchema.partial();

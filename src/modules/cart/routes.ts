@@ -45,7 +45,7 @@ const cartRoutes: FastifyPluginAsync = async (fastify) => {
                 body: UpdateCartItemSchema
             },
             handler: async (request, reply) => {
-                const item = await cartService.updateItem(request.user.id, request.params.id, request.body.quantity);
+                const item = await cartService.updateItem(request.user.id, request.params.id, request.body);
                 return reply.sendOk(item);
             },
         });
@@ -122,7 +122,7 @@ const cartRoutes: FastifyPluginAsync = async (fastify) => {
                 const item = await cartService.updateItem(
                     request.params.userId,
                     request.params.id,
-                    request.body.quantity,
+                    request.body,
                 );
                 return reply.sendOk(item);
             },

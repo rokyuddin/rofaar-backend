@@ -52,6 +52,8 @@ const ROLE_PERMISSIONS: Record<RoleName, Array<[string, string]>> = {
         ['read', 'users'], ['update', 'users'],
         // Contact
         ['read', 'contacts'], ['update', 'contacts'],
+        // Warehouses (multi-warehouse inventory management)
+        ['create', 'warehouses'], ['read', 'warehouses'], ['update', 'warehouses'], ['delete', 'warehouses'],
     ],
     operator: [
         // Orders

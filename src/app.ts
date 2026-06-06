@@ -34,6 +34,7 @@ import paymentRoutes from "@/modules/payments/routes.js";
 import shippingRoutes from "@/modules/shipping/routes.js";
 import refundRoutes from "@/modules/refunds/routes.js";
 import inventoryRoutes from "@/modules/inventory/routes.js";
+import warehouseRoutes from "@/modules/warehouses/routes.js";
 import userRoutes from "@/modules/users/routes.js";
 import qaRoutes from "@/modules/qa/routes.js";
 import searchRoutes from "@/modules/search/routes.js";
@@ -142,6 +143,7 @@ export async function buildApp() {
       await api.register(shippingRoutes);
       await api.register(refundRoutes);
       await api.register(inventoryRoutes);
+      await api.register(warehouseRoutes);
       await api.register(userRoutes);
       await api.register(qaRoutes);
       await api.register(searchRoutes);

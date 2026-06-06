@@ -1,14 +1,16 @@
-import { eq, and, sql, desc, count, gte } from 'drizzle-orm';
+import { eq, and, sql, desc, count, inArray } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import { orders, orderItems } from '@/db/schema/order.js';
 import { orderHistory } from '@/db/schema/order_history.js';
 import { cartItems } from '@/db/schema/cart.js';
 import { products } from '@/db/schema/product.js';
+import { productVariants } from '@/db/schema/productVariant.js';
 import { coupons } from '@/db/schema/coupon.js';
 import { refunds } from '@/db/schema/refund.js';
 import { shippingMethods } from '@/db/schema/shipping.js';
 import { addresses } from '@/db/schema/address.js';
 import { inventoryService } from '@/modules/inventory/service.js';
+import { warehouseService } from '@/modules/warehouses/service.js';
 import { NotFoundError, BadRequestError } from '@/shared/errors.js';
 import type { CreateOrder, OrderParams, UpdateStatus, UpdatePaymentStatus, CancelOrder } from './schema.js';
 
@@ -41,12 +43,89 @@ export class OrderService {
         });
     }
 
+    /**
+     * Deduct `quantity` units of `variantId` from a warehouse, and log the
+     * change in inventoryLogs (productId resolved automatically). Throws if
+     * no warehouse has enough stock.
+     */
+    private async deductFromWarehouse(
+        tx: any,
+        variantId: string,
+        productId: string,
+        quantity: number,
+        reason: string,
+        performedBy: string | null,
+        type: 'order_deduction' | 'manual_adjustment' = 'order_deduction',
+    ) {
+        const warehouseId = await warehouseService.pickWarehouseForDeduction(variantId, quantity);
+        await warehouseService.adjustInventory(
+            { variantId, warehouseId, quantityChange: -quantity, type, note: reason, performedBy: performedBy ?? undefined },
+            tx,
+        );
+        await inventoryService.logAdjustment(
+            {
+                productId,
+                variantId,
+                warehouseId,
+                quantityChange: -quantity,
+                type,
+                note: reason,
+                performedBy: performedBy ?? undefined,
+            },
+            tx,
+        );
+        return warehouseId;
+    }
+
+    /**
+     * Restock `quantity` units of `variantId` to a warehouse (preferred: the
+     * one that was the source for the original deduction if known; otherwise
+     * the first active warehouse).
+     */
+    private async restockToWarehouse(
+        tx: any,
+        variantId: string,
+        productId: string,
+        quantity: number,
+        reason: string,
+        performedBy: string | null,
+    ) {
+        const list = await warehouseService.listInventory({ variantId });
+        const target = list.rows[0];
+        if (!target) {
+            throw new BadRequestError(`No active warehouse available to restock variant ${variantId}`);
+        }
+        await warehouseService.adjustInventory(
+            {
+                variantId,
+                warehouseId: target.warehouseId,
+                quantityChange: quantity,
+                type: 'return_restock',
+                note: reason,
+                performedBy: performedBy ?? undefined,
+            },
+            tx,
+        );
+        await inventoryService.logAdjustment(
+            {
+                productId,
+                variantId,
+                warehouseId: target.warehouseId,
+                quantityChange: quantity,
+                type: 'return_restock',
+                note: reason,
+                performedBy: performedBy ?? undefined,
+            },
+            tx,
+        );
+    }
+
     // ─── User Methods ─────────────────────────────────────────────────────────
 
     async list(userId: string) {
         return db.query.orders.findMany({
             where: eq(orders.userId, userId),
-            with: { items: { with: { product: true } }, address: true },
+            with: { items: { with: { product: true, variant: true } }, address: true },
             orderBy: (o, { desc }) => [desc(o.createdAt)],
         });
     }
@@ -54,7 +133,7 @@ export class OrderService {
     async getById(userId: string, orderId: string) {
         const order = await db.query.orders.findFirst({
             where: and(eq(orders.id, orderId), eq(orders.userId, userId)),
-            with: { items: { with: { product: true } }, address: true, coupon: true },
+            with: { items: { with: { product: true, variant: true } }, address: true, coupon: true },
         });
         if (!order) throw new NotFoundError('Order');
         return order;
@@ -67,7 +146,7 @@ export class OrderService {
         const order = await db.query.orders.findFirst({
             where,
             with: {
-                items: { with: { product: true } },
+                items: { with: { product: true, variant: true } },
                 address: true,
             },
         });
@@ -95,7 +174,10 @@ export class OrderService {
         const [rows, totalResult] = await Promise.all([
             db.query.orders.findMany({
                 where: conditions.length > 0 ? and(...conditions) : undefined,
-                with: { user: { columns: { name: true, email: true } }, items: true },
+                with: {
+                    user: { columns: { name: true, email: true } },
+                    items: { with: { variant: true } },
+                },
                 limit,
                 offset,
                 orderBy: [desc(orders.createdAt)],
@@ -109,20 +191,20 @@ export class OrderService {
     async adminGetById(orderId: string) {
         const order = await db.query.orders.findFirst({
             where: eq(orders.id, orderId),
-            with: { user: true, items: { with: { product: true } }, address: true, coupon: true },
+            with: { user: true, items: { with: { product: true, variant: true } }, address: true, coupon: true },
         });
         if (!order) throw new NotFoundError('Order');
         return order;
     }
 
     // ─── Create Order ─────────────────────────────────────────────────────────
- 
+
     async create(userId: string, data: CreateOrder) {
         const { addressId, paymentMethod, shippingMethodId, couponCode } = data;
 
         const cart = await db.query.cartItems.findMany({
             where: eq(cartItems.userId, userId),
-            with: { product: true },
+            with: { product: true, variant: true },
         });
 
         if (!cart.length) throw new BadRequestError('Cart is empty');
@@ -137,6 +219,25 @@ export class OrderService {
         });
         if (!shippingMethod) throw new BadRequestError('Invalid shipping method');
         if (!shippingMethod.isActive) throw new BadRequestError('Shipping method is not active');
+
+        // Validate every cart line: variant belongs to product, is active, has stock
+        for (const item of cart) {
+            if (!item.variant || item.variant.productId !== item.productId) {
+                throw new BadRequestError('Cart contains an invalid variant');
+            }
+            if (!item.variant.isActive) {
+                throw new BadRequestError(`${item.variant.name} is not available for purchase`);
+            }
+            if (item.product.status !== 'published') {
+                throw new BadRequestError(`${item.product.name} is not available for purchase`);
+            }
+            const available = await inventoryService.getAvailableStock(item.variantId);
+            if (available < item.quantity) {
+                throw new BadRequestError(
+                    `Insufficient stock for ${item.variant.name}. Available: ${available}, requested: ${item.quantity}`,
+                );
+            }
+        }
 
         let subtotal = cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
         let discountAmount = 0;
@@ -167,16 +268,6 @@ export class OrderService {
         const total = Math.max(0, subtotal - discountAmount + shippingFee);
 
         return db.transaction(async (tx) => {
-            for (const item of cart) {
-                const product = await tx.query.products.findFirst({
-                    where: eq(products.id, item.productId),
-                });
-                if (!product) throw new NotFoundError(`Product ${item.productId} not found`);
-                if (product.stock < item.quantity) {
-                    throw new BadRequestError(`Insufficient stock for ${product.name}. Available: ${product.stock}, requested: ${item.quantity}`);
-                }
-            }
-
             const [o] = await tx.insert(orders).values({
                 userId,
                 addressId,
@@ -190,24 +281,43 @@ export class OrderService {
                 total: total.toFixed(2),
             }).returning();
 
+            // Snapshot variant info into orderItems so the receipt is stable
+            // even if the variant is later edited or deleted.
             await tx.insert(orderItems).values(
-                cart.map((item) => ({
-                    orderId: o!.id,
-                    productId: item.productId,
-                    quantity: item.quantity,
-                    unitPrice: item.price,
-                    totalPrice: (Number(item.price) * item.quantity).toFixed(2),
-                }))
+                cart.map((item) => {
+                    const unit = Number(item.variant!.salePrice ?? item.variant!.basePrice);
+                    return {
+                        orderId: o!.id,
+                        productId: item.productId,
+                        variantId: item.variantId,
+                        variantName: item.variant!.name,
+                        variantSku: item.variant!.sku,
+                        quantity: item.quantity,
+                        unitPrice: unit.toFixed(2),
+                        totalPrice: (unit * item.quantity).toFixed(2),
+                    };
+                }),
             );
 
+            // Deduct stock: per line, pick the best warehouse and log it
             for (const item of cart) {
-                await inventoryService.adjustStock({
-                    productId: item.productId,
-                    quantityChange: -item.quantity,
-                    type: 'order_deduction',
-                    note: `Order ${o!.id} placed`,
-                    performedBy: userId,
-                }, tx);
+                await this.deductFromWarehouse(
+                    tx,
+                    item.variantId,
+                    item.productId,
+                    item.quantity,
+                    `Order ${o!.id} placed`,
+                    userId,
+                    'order_deduction',
+                );
+
+                // Keep the denormalized mirror in the product_variants row in sync
+                await tx.update(productVariants)
+                    .set({
+                        stock: sql`GREATEST(${productVariants.stock} - ${item.quantity}, 0)`,
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(productVariants.id, item.variantId));
             }
 
             if (couponId) {
@@ -327,12 +437,12 @@ export class OrderService {
 
         const [updated] = await db
             .update(orders)
-            .set({ 
-                status: 'shipped', 
+            .set({
+                status: 'shipped',
                 trackingNumber: data.trackingNumber,
                 trackingUrl: data.trackingUrl,
                 shippedAt: new Date(),
-                updatedAt: new Date() 
+                updatedAt: new Date()
             })
             .where(eq(orders.id, id))
             .returning();
@@ -382,13 +492,21 @@ export class OrderService {
                 where: eq(orderItems.orderId, id),
             });
             for (const item of items) {
-                await inventoryService.adjustStock({
-                    productId: item.productId,
-                    quantityChange: item.quantity,
-                    type: 'return_restock',
-                    note: `Order ${id} returned`,
-                    performedBy: performedBy ?? order.userId,
-                }, tx);
+                if (!item.variantId) continue;
+                await this.restockToWarehouse(
+                    tx,
+                    item.variantId,
+                    item.productId,
+                    item.quantity,
+                    `Order ${id} returned`,
+                    performedBy ?? order.userId,
+                );
+                await tx.update(productVariants)
+                    .set({
+                        stock: sql`${productVariants.stock} + ${item.quantity}`,
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(productVariants.id, item.variantId));
             }
 
             await tx.insert(orderHistory).values({
@@ -432,13 +550,21 @@ export class OrderService {
                 where: eq(orderItems.orderId, id),
             });
             for (const item of items) {
-                await inventoryService.adjustStock({
-                    productId: item.productId,
-                    quantityChange: item.quantity,
-                    type: 'return_restock',
-                    note: `Order ${id} cancelled`,
-                    performedBy: performedBy ?? order.userId,
-                }, tx);
+                if (!item.variantId) continue;
+                await this.restockToWarehouse(
+                    tx,
+                    item.variantId,
+                    item.productId,
+                    item.quantity,
+                    `Order ${id} cancelled`,
+                    performedBy ?? order.userId,
+                );
+                await tx.update(productVariants)
+                    .set({
+                        stock: sql`${productVariants.stock} + ${item.quantity}`,
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(productVariants.id, item.variantId));
             }
 
             if (order.paymentStatus === 'paid') {
@@ -499,12 +625,21 @@ export class OrderService {
                 where: eq(orderItems.orderId, id),
             });
             for (const item of items) {
-                await inventoryService.adjustStock({
-                    productId: item.productId,
-                    quantityChange: item.quantity,
-                    type: 'return_restock',
-                    note: `Order ${id} deleted by admin`,
-                }, tx);
+                if (!item.variantId) continue;
+                await this.restockToWarehouse(
+                    tx,
+                    item.variantId,
+                    item.productId,
+                    item.quantity,
+                    `Order ${id} deleted by admin`,
+                    null,
+                );
+                await tx.update(productVariants)
+                    .set({
+                        stock: sql`${productVariants.stock} + ${item.quantity}`,
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(productVariants.id, item.variantId));
             }
 
             if (order.couponId) {
