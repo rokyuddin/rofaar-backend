@@ -36,6 +36,13 @@
       "when": 1780765526937,
       "tag": "0004_great_squadron_supreme",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780815433500,
+      "tag": "0005_furry_harpoon",
+      "breakpoints": true
     }
   ]
 }

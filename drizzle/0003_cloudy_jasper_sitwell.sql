@@ -130,7 +130,10 @@ ALTER TABLE "inventory_logs" ADD CONSTRAINT "inventory_logs_warehouse_id_warehou
 INSERT INTO "product_variants" ("product_id", "sku", "name", "base_price", "sale_price", "stock", "is_default", "is_active", "is_locked", "sort_order", "created_at", "updated_at")
 SELECT
 	p."id",
-	p."slug" || '-DEFAULT',
+	CASE
+		WHEN LENGTH(p."slug") <= 92 THEN p."slug" || '-DEFAULT'
+		ELSE LEFT(p."slug", 79) || '-' || SUBSTRING(MD5(p."id"::text), 1, 12) || '-DEFAULT'
+	END,
 	'Default',
 	COALESCE(p."price", '0'),
 	NULL,
