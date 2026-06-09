@@ -69,6 +69,13 @@ export async function buildApp() {
     }
   });
 
+  // Ensure body is never null (multipart plugin sets it to null for non-multipart requests)
+  app.addHook("preValidation", async (_req, _reply) => {
+    if (_req.body === null || _req.body === undefined) {
+      _req.body = {};
+    }
+  });
+
 // ─── Core Plugins (Must be first) ──────────────────────────────────────────
    await app.register(zodPlugin);
    await app.register(responsePlugin);

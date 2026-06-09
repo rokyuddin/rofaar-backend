@@ -345,76 +345,18 @@ const productRoutes: FastifyPluginAsync = async (fastify) => {
                 },
             });
 
-            app.put("/:id", {
+            app.patch("/:id", {
                 preHandler: [fastify.requirePermission("update", "products")],
                 schema: {
                     tags: ["Admin | Products"],
-                    summary: "Update product",
+                    summary: "Update product details",
                     description:
-                        "Updates an existing product. For has_variants=false products, the auto-generated default variant's price and stock are kept in sync with the product's price and stock.",
+                        "Partial update of product details (name, description, price, status, etc.). Only send the fields you want to change. Images, attributes, and variants are managed via their own endpoints.",
                     params: IdParamSchema,
+                    body: UpdateProductSchema,
                 },
                 handler: async (request, reply) => {
-                    const parts = request.parts();
-                    const body: any = {};
-                    const imageFiles: FileUpload[] = [];
-
-                    for await (const part of parts) {
-                        if (part.type === "file") {
-                            if (!ALLOWED_MIMETYPES.includes(part.mimetype)) {
-                                throw new BadRequestError(
-                                    `Invalid file type: ${part.mimetype}`,
-                                );
-                            }
-                            const buffer = await part.toBuffer();
-                            if (buffer.length > MAX_FILE_SIZE) {
-                                throw new BadRequestError(
-                                    `File too large: ${part.filename} exceeds 5MB`,
-                                );
-                            }
-                            imageFiles.push({
-                                filename: part.filename,
-                                mimetype: part.mimetype,
-                                data: buffer,
-                            });
-                        } else {
-                            body[part.fieldname] = part.value;
-                        }
-                    }
-
-                    if (imageFiles.length === 0) {
-                        throw new BadRequestError(
-                            "At least one product image is required. Upload one or more image files.",
-                        );
-                    }
-
-                    const payload = {
-                        ...body,
-                        price: body.price ? Number(body.price) : undefined,
-                        costPrice: body.costPrice ? Number(body.costPrice) : undefined,
-                        discountPercentage: body.discountPercentage
-                            ? Number(body.discountPercentage)
-                            : undefined,
-                        stock: body.stock ? Number(body.stock) : undefined,
-                        weight: body.weight ? Number(body.weight) : undefined,
-                        length: body.length ? Number(body.length) : undefined,
-                        width: body.width ? Number(body.width) : undefined,
-                        height: body.height ? Number(body.height) : undefined,
-                        hasVariants:
-                            body.hasVariants === undefined
-                                ? undefined
-                                : body.hasVariants === "true" || body.hasVariants === true,
-                        freeShipping:
-                            body.freeShipping === undefined
-                                ? undefined
-                                : body.freeShipping === "true" || body.freeShipping === true,
-                    };
-
-                    const validatedData = UpdateProductSchema.parse(payload);
-                    const product = await productService.update(request.params.id, {
-                        ...validatedData,
-                        imageFiles,
-                    });
+                    const product = await productService.update(request.params.id, request.body);
                     return reply.sendOk(product);
                 },
             });
