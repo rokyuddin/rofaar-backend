@@ -471,7 +471,6 @@ export class ProductService {
 
     async create(data: CreateProduct & { imageFiles?: FileUpload[] }) {
         const {
-            images: existingImages,
             imageFiles,
             variants: variantsInput,
             specs: specsInput,
@@ -601,16 +600,10 @@ export class ProductService {
                 }
 
                 // ── Insert images
-                const allImages = [
-                    ...(existingImages || []).map((img) => ({
-                        url: img.url,
-                        sortOrder: img.sortOrder,
-                    })),
-                    ...uploadedUrls.map((url, index) => ({
-                        url,
-                        sortOrder: (existingImages?.length || 0) + index,
-                    })),
-                ];
+                const allImages = uploadedUrls.map((url, index) => ({
+                    url,
+                    sortOrder: index,
+                }));
 
                 if (allImages.length > 0) {
                     await tx.insert(productImages).values(
@@ -650,7 +643,6 @@ export class ProductService {
 
     async update(id: string, data: UpdateProduct & { imageFiles?: FileUpload[] }) {
         const {
-            images: existingImages,
             imageFiles,
             variants: _variantsInput,
             specs: _specsInput,
@@ -745,29 +737,21 @@ export class ProductService {
                     }
                 }
 
-                if (existingImages || uploadedUrls.length > 0) {
+                if (uploadedUrls.length > 0) {
                     await tx.delete(productImages).where(eq(productImages.productId, id));
 
-                    const allImages: Array<{ url: string; sortOrder: number }> = [
-                        ...(existingImages || []).map((img: any) => ({
-                            url: img.url as string,
-                            sortOrder: (img.sortOrder as number) ?? 0,
-                        })),
-                        ...uploadedUrls.map((url, index) => ({
-                            url,
-                            sortOrder: (existingImages?.length || 0) + index,
-                        })),
-                    ];
+                    const allImages = uploadedUrls.map((url, index) => ({
+                        url,
+                        sortOrder: index,
+                    }));
 
-                    if (allImages.length > 0) {
-                        await tx.insert(productImages).values(
-                            allImages.map((img) => ({
-                                productId: id,
-                                url: img.url,
-                                sortOrder: img.sortOrder,
-                            })),
-                        );
-                    }
+                    await tx.insert(productImages).values(
+                        allImages.map((img) => ({
+                            productId: id,
+                            url: img.url,
+                            sortOrder: img.sortOrder,
+                        })),
+                    );
                 }
 
                 const result = await tx.query.products.findFirst({
@@ -1403,7 +1387,6 @@ export class ProductService {
                     height: data.height,
                     categoryId: data.categoryId,
                     brandId: data.brandId,
-                    images: data.images ?? [],
                 });
                 createdProducts.push(created2);
                 created += 1;

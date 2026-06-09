@@ -225,9 +225,9 @@ const productRoutes: FastifyPluginAsync = async (fastify) => {
                         }
                     }
 
-                    if (imageFiles.length === 0 && !body.images) {
+                    if (imageFiles.length === 0) {
                         throw new BadRequestError(
-                            "At least one product image is required. Upload an image file or provide an 'images' JSON array.",
+                            "At least one product image is required. Upload one or more image files.",
                         );
                     }
 
@@ -249,7 +249,6 @@ const productRoutes: FastifyPluginAsync = async (fastify) => {
                                 : body.hasVariants === "true" || body.hasVariants === true,
                         freeShipping:
                             body.freeShipping === "true" || body.freeShipping === true,
-                        images: body.images ? JSON.parse(body.images) : undefined,
                         variants: body.variants ? JSON.parse(body.variants) : undefined,
                         specs: body.specs ? JSON.parse(body.specs) : undefined,
                     };
@@ -403,7 +402,6 @@ const productRoutes: FastifyPluginAsync = async (fastify) => {
                             body.freeShipping === undefined
                                 ? undefined
                                 : body.freeShipping === "true" || body.freeShipping === true,
-                        images: body.images ? JSON.parse(body.images) : undefined,
                     };
 
                     const validatedData = UpdateProductSchema.parse(payload);

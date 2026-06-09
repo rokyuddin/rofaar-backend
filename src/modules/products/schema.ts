@@ -161,11 +161,6 @@ export const CreateProductBaseSchema = z
             .describe("Current inventory count. Required (>=0) when hasVariants=false; 0 is allowed when hasVariants=true."),
         categoryId: z.string().optional().describe("Category is optional"),
         brandId: z.string().optional().describe("Brand is optional"),
-        images: z
-            .array(ImageSchema)
-            .min(1, "At least one product image is required")
-            .optional()
-            .describe("List of product images with URLs"),
         variants: z
             .array(CreateVariantSchema)
             .optional()
@@ -192,12 +187,6 @@ export const CreateProductSchema = CreateProductBaseSchema.refine(
     {
         message: "costPrice (>0) is required when hasVariants is false",
         path: ["costPrice"],
-    },
-).refine(
-    (d) => (d.images !== undefined && d.images.length > 0),
-    {
-        message: "At least one product image is required",
-        path: ["images"],
     },
 );
 
