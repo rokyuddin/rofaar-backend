@@ -5,7 +5,7 @@ import { AppError } from '@/shared/errors.js';
 import { apiError } from '@/shared/response.js';
 
 const errorHandlerPlugin: FastifyPluginAsync = async (fastify) => {
-    fastify.setErrorHandler((error, request, reply) => {
+    fastify.setErrorHandler((error: Error & { statusCode?: number }, request, reply) => {
         request.log.error({ err: error, url: request.url }, 'Request error');
 
         if (error instanceof AppError) {
@@ -25,8 +25,12 @@ const errorHandlerPlugin: FastifyPluginAsync = async (fastify) => {
             );
         }
 
+        const isDev = process.env.NODE_ENV === 'development';
         return reply.code(500).send(
-            apiError('INTERNAL_SERVER_ERROR', 'An unexpected error occurred'),
+            apiError(
+                'INTERNAL_SERVER_ERROR',
+                isDev ? error.message : 'An unexpected error occurred',
+            ),
         );
     });
 

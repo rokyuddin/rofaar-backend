@@ -159,8 +159,8 @@ export const CreateProductBaseSchema = z
             .nonnegative()
             .optional()
             .describe("Current inventory count. Required (>=0) when hasVariants=false; 0 is allowed when hasVariants=true."),
-        categoryId: z.string().optional().describe("Category is optional"),
-        brandId: z.string().optional().describe("Brand is optional"),
+        categoryId: z.string().uuid("categoryId must be a valid UUID").optional().describe("Category is optional"),
+        brandId: z.string().uuid("brandId must be a valid UUID").optional().describe("Brand is optional"),
         variants: z
             .array(CreateVariantSchema)
             .optional()

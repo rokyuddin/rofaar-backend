@@ -500,6 +500,19 @@ export class ProductService {
                     );
                 }
 
+                if (productData.categoryId) {
+                    const cat = await tx.query.categories.findFirst({
+                        where: eq(categories.id, productData.categoryId),
+                    });
+                    if (!cat) throw new NotFoundError("Category");
+                }
+                if (productData.brandId) {
+                    const brand = await tx.query.brands.findFirst({
+                        where: eq(brands.id, productData.brandId),
+                    });
+                    if (!brand) throw new NotFoundError("Brand");
+                }
+
                 const insertValues: any = {
                     name: productData.name,
                     slug: productData.slug,
