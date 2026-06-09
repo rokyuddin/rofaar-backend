@@ -129,7 +129,6 @@ export function assertRowCount(rows: Record<string, unknown>[]): void {
 
 export const REQUIRED_COLUMNS = [
   "name",
-  "slug",
   "description",
   "price",
   "costPrice",

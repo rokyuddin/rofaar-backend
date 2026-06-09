@@ -516,11 +516,7 @@ export class ProductService {
             }
 
             return await db.transaction(async (tx) => {
-                // Auto-generate slug from name if not provided, ensure uniqueness
-                const baseSlug = productData.slug
-                    ? sanitizeSlug(productData.slug)
-                    : sanitizeSlug(productData.name);
-                const slug = await ensureUniqueSlug(baseSlug, tx);
+                const slug = await ensureUniqueSlug(sanitizeSlug(productData.name), tx);
 
                 if (productData.categoryId) {
                     const cat = await tx.query.categories.findFirst({
@@ -715,10 +711,6 @@ export class ProductService {
 
                 const updateValues: any = { updatedAt: new Date() };
                 if (productData.name !== undefined) updateValues.name = productData.name;
-                if (productData.slug !== undefined && productData.slug !== existing.slug) {
-                    const newSlug = await ensureUniqueSlug(sanitizeSlug(productData.slug), tx);
-                    updateValues.slug = newSlug;
-                }
                 if (productData.description !== undefined)
                     updateValues.description = productData.description;
                 if (productData.price !== undefined)
@@ -1403,23 +1395,10 @@ export class ProductService {
                     };
                 }
             }
-            const existing = await db.query.products.findFirst({
-                where: eq(products.slug, data.slug),
-            });
-            if (existing) {
-                return {
-                    totalRows: parsed.totalRows,
-                    created,
-                    failedAtRow: rowNumber,
-                    errors: [`slug: Product with slug "${data.slug}" already exists`],
-                    createdProducts: [],
-                };
-            }
 
             try {
                 const created2 = await this.create({
                     name: data.name,
-                    slug: data.slug,
                     description: data.description,
                     price: data.price,
                     costPrice: data.costPrice,

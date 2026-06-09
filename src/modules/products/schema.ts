@@ -133,7 +133,6 @@ export const CreateProductBaseSchema = z
             .min(1)
             .describe("Name of the product")
             .max(256, "Name can not be maximum of 256 characters"),
-        slug: z.string().min(1).optional().describe("URL-friendly slug. Auto-generated from name if omitted."),
         description: z.string().min(4).optional().describe("Detailed product description"),
         status: ProductStatusSchema,
         hasVariants: z.coerce.boolean(),
@@ -350,7 +349,6 @@ export const BulkProductRowSchema = z.object({
         .string()
         .min(1, "Name is required")
         .max(256, "Name cannot exceed 256 characters"),
-    slug: z.string().min(1, "Slug is required"),
     description: z.string().min(4, "Description must be at least 4 characters").optional(),
     price: z.coerce.number().positive("Price must be a positive number"),
     costPrice: z.coerce
