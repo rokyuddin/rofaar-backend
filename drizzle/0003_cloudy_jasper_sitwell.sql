@@ -245,8 +245,6 @@ CREATE INDEX "product_inventory_variant_id_idx" ON "product_inventory" USING btr
 --> statement-breakpoint
 CREATE INDEX "product_inventory_warehouse_id_idx" ON "product_inventory" USING btree ("warehouse_id");
 --> statement-breakpoint
-CREATE UNIQUE INDEX "warehouses_code_unique" ON "warehouses" USING btree ("code");
---> statement-breakpoint
 CREATE INDEX "categories_parent_id_idx" ON "categories" USING btree ("parent_id");
 --> statement-breakpoint
 CREATE INDEX "cart_items_user_variant_idx" ON "cart_items" USING btree ("user_id","variant_id");
