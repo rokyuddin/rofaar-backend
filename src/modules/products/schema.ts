@@ -134,9 +134,9 @@ export const CreateProductBaseSchema = z
             .describe("Name of the product")
             .max(256, "Name can not be maximum of 256 characters"),
         slug: z.string().min(1).describe("Unique URL-friendly slug"),
-        description: z.string().min(4).describe("Detailed product description"),
-        status: ProductStatusSchema.default("published"),
-        hasVariants: z.coerce.boolean().default(false),
+        description: z.string().min(4).optional().describe("Detailed product description"),
+        status: ProductStatusSchema,
+        hasVariants: z.coerce.boolean(),
         price: z
             .number()
             .nonnegative()
@@ -159,10 +159,11 @@ export const CreateProductBaseSchema = z
             .nonnegative()
             .optional()
             .describe("Current inventory count. Required (>=0) when hasVariants=false; 0 is allowed when hasVariants=true."),
-        categoryId: z.string({ required_error: "Category is required" }),
-        brandId: z.string({ required_error: "Brand is required" }),
+        categoryId: z.string().optional().describe("Category is optional"),
+        brandId: z.string().optional().describe("Brand is optional"),
         images: z
             .array(ImageSchema)
+            .min(1, "At least one product image is required")
             .optional()
             .describe("List of product images with URLs"),
         variants: z
@@ -191,6 +192,12 @@ export const CreateProductSchema = CreateProductBaseSchema.refine(
     {
         message: "costPrice (>0) is required when hasVariants is false",
         path: ["costPrice"],
+    },
+).refine(
+    (d) => (d.images !== undefined && d.images.length > 0),
+    {
+        message: "At least one product image is required",
+        path: ["images"],
     },
 );
 
@@ -355,7 +362,7 @@ export const BulkProductRowSchema = z.object({
         .min(1, "Name is required")
         .max(256, "Name cannot exceed 256 characters"),
     slug: z.string().min(1, "Slug is required"),
-    description: z.string().min(4, "Description must be at least 4 characters"),
+    description: z.string().min(4, "Description must be at least 4 characters").optional(),
     price: z.coerce.number().positive("Price must be a positive number"),
     costPrice: z.coerce
         .number()
@@ -383,8 +390,8 @@ export const BulkProductRowSchema = z.object({
     length: z.coerce.number().positive().max(10000).optional(),
     width: z.coerce.number().positive().max(10000).optional(),
     height: z.coerce.number().positive().max(10000).optional(),
-    categoryId: z.string().uuid("categoryId must be a valid UUID"),
-    brandId: z.string().uuid("brandId must be a valid UUID"),
+    categoryId: z.string().uuid("categoryId must be a valid UUID").optional(),
+    brandId: z.string().uuid("brandId must be a valid UUID").optional(),
     images: z
         .string()
         .optional()

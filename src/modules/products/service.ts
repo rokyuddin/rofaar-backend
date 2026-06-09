@@ -1344,29 +1344,33 @@ export class ProductService {
             }
             const data = validation.data;
 
-            const category = await db.query.categories.findFirst({
-                where: eq(categories.id, data.categoryId),
-            });
-            if (!category) {
-                return {
-                    totalRows: parsed.totalRows,
-                    created,
-                    failedAtRow: rowNumber,
-                    errors: [`categoryId: Category not found for id ${data.categoryId}`],
-                    createdProducts: [],
-                };
+            if (data.categoryId) {
+                const category = await db.query.categories.findFirst({
+                    where: eq(categories.id, data.categoryId),
+                });
+                if (!category) {
+                    return {
+                        totalRows: parsed.totalRows,
+                        created,
+                        failedAtRow: rowNumber,
+                        errors: [`categoryId: Category not found for id ${data.categoryId}`],
+                        createdProducts: [],
+                    };
+                }
             }
-            const brand = await db.query.brands.findFirst({
-                where: eq(brands.id, data.brandId),
-            });
-            if (!brand) {
-                return {
-                    totalRows: parsed.totalRows,
-                    created,
-                    failedAtRow: rowNumber,
-                    errors: [`brandId: Brand not found for id ${data.brandId}`],
-                    createdProducts: [],
-                };
+            if (data.brandId) {
+                const brand = await db.query.brands.findFirst({
+                    where: eq(brands.id, data.brandId),
+                });
+                if (!brand) {
+                    return {
+                        totalRows: parsed.totalRows,
+                        created,
+                        failedAtRow: rowNumber,
+                        errors: [`brandId: Brand not found for id ${data.brandId}`],
+                        createdProducts: [],
+                    };
+                }
             }
             const existing = await db.query.products.findFirst({
                 where: eq(products.slug, data.slug),
