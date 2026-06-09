@@ -133,7 +133,7 @@ export const CreateProductBaseSchema = z
             .min(1)
             .describe("Name of the product")
             .max(256, "Name can not be maximum of 256 characters"),
-        slug: z.string().min(1).describe("Unique URL-friendly slug"),
+        slug: z.string().min(1).optional().describe("URL-friendly slug. Auto-generated from name if omitted."),
         description: z.string().min(4).optional().describe("Detailed product description"),
         status: ProductStatusSchema,
         hasVariants: z.coerce.boolean(),

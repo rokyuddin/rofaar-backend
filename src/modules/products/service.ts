@@ -44,6 +44,31 @@ import {
     REQUIRED_COLUMNS,
 } from "./bulk-import.js";
 
+// ─── Slug utilities ──────────────────────────────────────────────────────────
+
+function sanitizeSlug(input: string): string {
+    return input
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, "")   // strip special chars
+        .replace(/\s+/g, "-")            // spaces → hyphens
+        .replace(/-+/g, "-")             // collapse multiple hyphens
+        .replace(/^-|-$/g, "");          // trim leading/trailing hyphens
+}
+
+async function ensureUniqueSlug(base: string, tx: any): Promise<string> {
+    let slug = base;
+    let counter = 0;
+    while (true) {
+        const existing = await tx.query.products.findFirst({
+            where: eq(products.slug, slug),
+        });
+        if (!existing) return slug;
+        counter++;
+        slug = `${base}-${counter}`;
+    }
+}
+
 export class ProductService {
     // ─── Enrichment (response shaping) ──────────────────────────────────────
 
@@ -491,14 +516,11 @@ export class ProductService {
             }
 
             return await db.transaction(async (tx) => {
-                const existingSlug = await tx.query.products.findFirst({
-                    where: eq(products.slug, productData.slug),
-                });
-                if (existingSlug) {
-                    throw new ConflictError(
-                        `Product with slug "${productData.slug}" already exists`,
-                    );
-                }
+                // Auto-generate slug from name if not provided, ensure uniqueness
+                const baseSlug = productData.slug
+                    ? sanitizeSlug(productData.slug)
+                    : sanitizeSlug(productData.name);
+                const slug = await ensureUniqueSlug(baseSlug, tx);
 
                 if (productData.categoryId) {
                     const cat = await tx.query.categories.findFirst({
@@ -515,7 +537,7 @@ export class ProductService {
 
                 const insertValues: any = {
                     name: productData.name,
-                    slug: productData.slug,
+                    slug,
                     description: productData.description,
                     price: (productData.price ?? 0).toString(),
                     costPrice: (productData.costPrice ?? 0).toString(),
@@ -547,7 +569,7 @@ export class ProductService {
                 if (!product.hasVariants) {
                     await tx.insert(productVariants).values({
                         productId: product.id,
-                        sku: `${product.slug}-DEFAULT`,
+                        sku: `SKU-${product.id.slice(0, 8)}`,
                         name: "Default",
                         basePrice: (productData.price ?? 0).toString(),
                         salePrice: null,
@@ -694,15 +716,8 @@ export class ProductService {
                 const updateValues: any = { updatedAt: new Date() };
                 if (productData.name !== undefined) updateValues.name = productData.name;
                 if (productData.slug !== undefined && productData.slug !== existing.slug) {
-                    const slugCollision = await tx.query.products.findFirst({
-                        where: eq(products.slug, productData.slug),
-                    });
-                    if (slugCollision) {
-                        throw new ConflictError(
-                            `Product with slug "${productData.slug}" already exists`,
-                        );
-                    }
-                    updateValues.slug = productData.slug;
+                    const newSlug = await ensureUniqueSlug(sanitizeSlug(productData.slug), tx);
+                    updateValues.slug = newSlug;
                 }
                 if (productData.description !== undefined)
                     updateValues.description = productData.description;
@@ -756,7 +771,7 @@ export class ProductService {
                         // Edge case: no default variant exists, create one
                         await tx.insert(productVariants).values({
                             productId: product.id,
-                            sku: `${product.slug}-DEFAULT`,
+                        sku: `SKU-${product.id.slice(0, 8)}`,
                             name: "Default",
                             basePrice: productData.price?.toString() ?? product.price,
                             salePrice: null,
