@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { cartService } from './service.js';
-import { AddCartItemSchema, UpdateCartItemSchema } from './schema.js';
+import { AddCartItemSchema, SyncCartSchema, UpdateCartItemSchema } from './schema.js';
 import { IdParamSchema, UuidSchema } from '@/shared/types.js';
 import { z } from 'zod';
 
@@ -72,6 +72,20 @@ const cartRoutes: FastifyPluginAsync = async (fastify) => {
             handler: async (request, reply) => {
                 await cartService.clear(request.user.id);
                 return reply.sendOk(null, 'Cart cleared');
+            },
+        });
+
+        app.post('/sync', {
+            schema: {
+                tags: ['Cart'],
+                summary: 'Sync local cart to backend',
+                description:
+                    'Merges local cart items with the backend cart. Quantities are summed for duplicate variants. Invalid or out-of-stock items are skipped.',
+                body: SyncCartSchema,
+            },
+            handler: async (request, reply) => {
+                const result = await cartService.sync(request.user.id, request.body.items);
+                return reply.sendOk(result);
             },
         });
     }, { prefix: '/cart' });

@@ -126,6 +126,40 @@ export class WishlistService {
             await tx.delete(wishlistItems).where(eq(wishlistItems.userId, userId));
         });
     }
+
+    /**
+     * Sync local wishlist items with the backend.
+     * Silently skips duplicates and invalid products.
+     */
+    async sync(userId: string, items: Array<{ productId: string }>) {
+        const synced: Array<{ id: string; productId: string; createdAt: Date }> = [];
+        const skipped: Array<{ productId: string; reason: string }> = [];
+
+        await db.transaction(async (tx) => {
+            for (const item of items) {
+                const product = await tx.query.products.findFirst({
+                    where: eq(products.id, item.productId),
+                });
+                if (!product) {
+                    skipped.push({ productId: item.productId, reason: "Product not found" });
+                    continue;
+                }
+
+                const [inserted] = await tx
+                    .insert(wishlistItems)
+                    .values({ userId, productId: item.productId })
+                    .onConflictDoNothing()
+                    .returning();
+
+                if (inserted) {
+                    synced.push({ id: inserted.id, productId: inserted.productId, createdAt: inserted.createdAt });
+                }
+                // Duplicate (conflict) — silently skipped, not added to skipped list
+            }
+        });
+
+        return { synced, skipped };
+    }
 }
 
 export const wishlistService = new WishlistService();

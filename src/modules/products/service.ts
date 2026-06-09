@@ -491,6 +491,15 @@ export class ProductService {
             }
 
             return await db.transaction(async (tx) => {
+                const existingSlug = await tx.query.products.findFirst({
+                    where: eq(products.slug, productData.slug),
+                });
+                if (existingSlug) {
+                    throw new ConflictError(
+                        `Product with slug "${productData.slug}" already exists`,
+                    );
+                }
+
                 const insertValues: any = {
                     name: productData.name,
                     slug: productData.slug,
@@ -671,7 +680,17 @@ export class ProductService {
 
                 const updateValues: any = { updatedAt: new Date() };
                 if (productData.name !== undefined) updateValues.name = productData.name;
-                if (productData.slug !== undefined) updateValues.slug = productData.slug;
+                if (productData.slug !== undefined && productData.slug !== existing.slug) {
+                    const slugCollision = await tx.query.products.findFirst({
+                        where: eq(products.slug, productData.slug),
+                    });
+                    if (slugCollision) {
+                        throw new ConflictError(
+                            `Product with slug "${productData.slug}" already exists`,
+                        );
+                    }
+                    updateValues.slug = productData.slug;
+                }
                 if (productData.description !== undefined)
                     updateValues.description = productData.description;
                 if (productData.price !== undefined)

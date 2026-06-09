@@ -188,6 +188,92 @@ export class CartService {
     }
 
     /**
+     * Sync local cart items with the backend.
+     * Merges quantities for duplicate variants, skips invalid items.
+     */
+    async sync(
+        userId: string,
+        items: Array<{ variantId: string; quantity: number }>,
+    ) {
+        const synced: Array<{ id: string; variantId: string; quantity: number; price: string }> = [];
+        const skipped: Array<{ variantId: string; reason: string }> = [];
+
+        await db.transaction(async (tx) => {
+            for (const item of items) {
+                try {
+                    const variant = await tx.query.productVariants.findFirst({
+                        where: eq(productVariants.id, item.variantId),
+                        with: { product: true },
+                    });
+                    if (!variant) {
+                        skipped.push({ variantId: item.variantId, reason: "Variant not found" });
+                        continue;
+                    }
+                    if (!variant.isActive) {
+                        skipped.push({ variantId: item.variantId, reason: "Variant is not available" });
+                        continue;
+                    }
+                    if (variant.product.status !== "published") {
+                        skipped.push({ variantId: item.variantId, reason: "Product is not available" });
+                        continue;
+                    }
+
+                    const available = await inventoryService.getAvailableStock(variant.id);
+                    const price = (variant.salePrice ? Number(variant.salePrice) : Number(variant.basePrice)).toFixed(2);
+
+                    const existing = await tx.query.cartItems.findFirst({
+                        where: and(eq(cartItems.userId, userId), eq(cartItems.variantId, variant.id)),
+                    });
+
+                    if (existing) {
+                        const newQty = existing.quantity + item.quantity;
+                        if (available < newQty) {
+                            skipped.push({
+                                variantId: item.variantId,
+                                reason: `Insufficient stock. Available: ${available}, requested: ${newQty}`,
+                            });
+                            continue;
+                        }
+                        const [updated] = await tx
+                            .update(cartItems)
+                            .set({ quantity: newQty, price, updatedAt: new Date() })
+                            .where(eq(cartItems.id, existing.id))
+                            .returning();
+                        if (updated) {
+                            synced.push({ id: updated.id, variantId: updated.variantId, quantity: updated.quantity, price: updated.price });
+                        }
+                    } else {
+                        if (available < item.quantity) {
+                            skipped.push({
+                                variantId: item.variantId,
+                                reason: `Insufficient stock. Available: ${available}, requested: ${item.quantity}`,
+                            });
+                            continue;
+                        }
+                        const [inserted] = await tx
+                            .insert(cartItems)
+                            .values({
+                                userId,
+                                productId: variant.productId,
+                                variantId: variant.id,
+                                quantity: item.quantity,
+                                price,
+                            })
+                            .returning();
+                        if (inserted) {
+                            synced.push({ id: inserted.id, variantId: inserted.variantId, quantity: inserted.quantity, price: inserted.price });
+                        }
+                    }
+                } catch {
+                    skipped.push({ variantId: item.variantId, reason: "Unexpected error processing item" });
+                }
+            }
+        });
+
+        return { synced, skipped };
+    }
+
+    /**
      * Internal helper used by the orders service: fetch the cart with full
      * variant + product info for order creation.
      */

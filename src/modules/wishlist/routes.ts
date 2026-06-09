@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { wishlistService } from './service.js';
-import { AddWishlistItemSchema } from './schema.js';
+import { AddWishlistItemSchema, SyncWishlistSchema } from './schema.js';
 import { IdParamSchema } from '@/shared/types.js';
 
 const wishlistRoutes: FastifyPluginAsync = async (fastify) => {
@@ -68,6 +68,20 @@ const wishlistRoutes: FastifyPluginAsync = async (fastify) => {
         handler: async (request, reply) => {
           await wishlistService.moveAllToCart(request.user.id);
           return reply.sendOk(null, "All items moved to cart");
+        },
+      });
+
+      app.post("/sync", {
+        schema: {
+          tags: ["Wishlist"],
+          summary: "Sync local wishlist to backend",
+          description:
+            "Merges local wishlist items with the backend. Duplicates are silently ignored. Invalid products are skipped.",
+          body: SyncWishlistSchema,
+        },
+        handler: async (request, reply) => {
+          const result = await wishlistService.sync(request.user.id, request.body.items);
+          return reply.sendOk(result);
         },
       });
     },
