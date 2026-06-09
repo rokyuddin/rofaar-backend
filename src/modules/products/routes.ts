@@ -382,6 +382,12 @@ const productRoutes: FastifyPluginAsync = async (fastify) => {
                         }
                     }
 
+                    if (imageFiles.length === 0) {
+                        throw new BadRequestError(
+                            "At least one product image is required. Upload one or more image files.",
+                        );
+                    }
+
                     const payload = {
                         ...body,
                         price: body.price ? Number(body.price) : undefined,
