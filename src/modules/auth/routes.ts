@@ -117,52 +117,73 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.sendCreated(null, "Registration successful. Please wait for admin approval.");
         },
       });
-
       app.post("/register/send-otp", {
         schema: {
           tags: ["Authentication"],
-          summary: "Send registration OTP (disabled)",
-          description: "This endpoint is currently disabled.",
+          summary: "Send registration OTP",
+          description:
+            "Sends a registration OTP to the provided phone number. Account creation will be pending until OTP verification and admin approval.",
           body: RequestOtpBodySchema,
         },
-        handler: async (_request, reply) => {
-          return reply.status(403).send({
-            success: false,
-            message: "Registration via OTP is currently disabled. Please use the new registration endpoint.",
-          });
+        config: {
+          rateLimit: { max: 3, timeWindow: "5 minutes" },
+        },
+        handler: async (request, reply) => {
+          await authService.sendRegistrationOtp(request.body.phone);
+          return reply.sendOk(null, "OTP sent to your phone number.");
         },
       });
 
       app.post("/register/verify-otp", {
         schema: {
           tags: ["Authentication"],
-          summary: "Verify registration OTP (disabled)",
-          description: "This endpoint is currently disabled.",
+          summary: "Verify registration OTP",
+          description:
+            "Verifies the registration OTP and returns a temporary token for completing profile setup.",
           body: VerifyOtpBodySchema,
+          response: { 200: AuthResponseSchema },
         },
-        handler: async (_request, reply) => {
-          return reply.status(403).send({
-            success: false,
-            message: "Registration via OTP is currently disabled. Please use the new registration endpoint.",
-          });
+        config: {
+          rateLimit: { max: 5, timeWindow: "5 minutes" },
+        },
+        handler: async (request, reply) => {
+          const token = await authService.verifyRegistrationOtp(
+            request.body.phone,
+            request.body.otp,
+          );
+          return reply.sendOk({ token });
         },
       });
 
       app.post("/register/complete", {
         schema: {
           tags: ["Authentication"],
-          summary: "Complete registration (disabled)",
-          description: "This endpoint is currently disabled.",
+          summary: "Complete registration",
+          description:
+            "Completes the registration process with profile information using the temporary token from OTP verification.",
           body: CompleteRegistrationBodySchema,
+          response: { 200: AuthResponseSchema },
         },
-        handler: async (_request, reply) => {
-          return reply.status(403).send({
-            success: false,
-            message: "Registration via OTP is currently disabled. Please use the new registration endpoint.",
+        config: {
+          rateLimit: { max: 5, timeWindow: "5 minutes" },
+        },
+        handler: async (request, reply) => {
+          const result = await authService.completeRegistration(
+            request.body.token,
+            request.body,
+          );
+          return reply.sendCreated({
+            token: result.refreshToken,
+            refreshToken: result.refreshToken,
+            user: {
+              id: result.id,
+              name: result.name,
+              email: result.email,
+              role: result.role,
+            },
           });
         },
       });
-
       app.post("/login", {
         schema: {
           tags: ["Authentication"],
@@ -170,6 +191,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           description: "Authenticates a customer using phone and password.",
           body: LoginBodySchema,
           response: { 200: AuthResponseSchema },
+        },
+        config: {
+          rateLimit: { max: 5, timeWindow: "15 minutes" },
         },
         handler: async (request, reply) => {
           const user = await authService.login(request.body);
@@ -197,6 +221,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
             "Sends a password reset OTP to the provided phone number.",
           body: ForgotPasswordBodySchema,
         },
+        config: {
+          rateLimit: { max: 3, timeWindow: "5 minutes" },
+        },
         handler: async (request, reply) => {
           await authService.forgotPassword(request.body.phone);
           return reply.sendOk(
@@ -214,6 +241,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
             "Verifies the password reset OTP and returns a reset token.",
           body: VerifyResetOtpBodySchema,
         },
+        config: {
+          rateLimit: { max: 5, timeWindow: "5 minutes" },
+        },
         handler: async (request, reply) => {
           const resetToken = await authService.verifyResetOtp(
             request.body.phone,
@@ -229,6 +259,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           summary: "Forgot password - Reset",
           description: "Resets the password using the reset token.",
           body: ResetPasswordWithTokenSchema,
+        },
+        config: {
+          rateLimit: { max: 3, timeWindow: "5 minutes" },
         },
         handler: async (request, reply) => {
           await authService.resetPasswordWithToken(
@@ -257,6 +290,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
             "Authenticates an admin or operator using phone and password.",
           body: AdminLoginBodySchema,
           response: { 200: AuthResponseSchema },
+        },
+        config: {
+          rateLimit: { max: 5, timeWindow: "15 minutes" },
         },
         handler: async (request, reply) => {
           const user = await authService.adminLogin(request.body);

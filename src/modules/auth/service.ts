@@ -6,7 +6,8 @@ import { users } from '@/db/schema/user.js';
 import { roles } from '@/db/schema/rbac.js';
 import { otps } from '@/db/schema/otp.js';
 import { refreshTokens } from '@/db/schema/session.js';
-import { ConflictError, UnauthorizedError, NotFoundError, BadRequestError } from '@/shared/errors.js';
+import { ConflictError, UnauthorizedError, NotFoundError, BadRequestError, TooManyRequestsError } from '@/shared/errors.js';
+import { notificationService } from '@/shared/services/notification.js';
 
 export class AuthService {
     /** Step 1: Send OTP for registration. */
@@ -51,8 +52,8 @@ export class AuthService {
             expiresAt,
         });
 
-        // TODO: Integrate with SMS Service
-        console.log(`[SMS MOCK] Registration OTP for ${phone}: ${code}`);
+        // Send OTP via SMS service
+        await notificationService.sendSms(phone, `Your registration OTP is: ${code}`);
     }
 
     /** Single-step registration: creates a pending user awaiting admin approval. */
@@ -152,7 +153,14 @@ export class AuthService {
 
         const role = await db.query.roles.findFirst({ where: eq(roles.id, updatedUser!.roleId) });
 
-        return { ...updatedUser!, role: role?.name || 'customer' };
+        // Generate refresh token
+        const refreshToken = await this.createRefreshToken(updatedUser!.id);
+
+        return { 
+            ...updatedUser!, 
+            role: role?.name || 'customer',
+            refreshToken
+        };
     }
 
     /** Login and return the user record with role name. */
@@ -206,8 +214,8 @@ export class AuthService {
             expiresAt,
         });
 
-        // TODO: Integrate with SMS Service
-        console.log(`[SMS MOCK] Password reset OTP for ${phone}: ${code}`);
+        // Send OTP via SMS service
+        await notificationService.sendSms(phone, `Your password reset OTP is: ${code}`);
     }
 
     /** Verify Password Reset OTP: returns a secure reset token if OTP is valid. */
